@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://troll-animation-web-by-joven.pages.dev/sitemap.xml
