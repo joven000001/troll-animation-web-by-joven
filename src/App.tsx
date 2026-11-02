@@ -353,6 +353,36 @@ export default function App() {
           </div>
         </div>
 
+        {/* Search-friendly introduction for visitors and search engines */}
+        <section
+          aria-labelledby="about-troll-animation"
+          className="mx-auto max-w-4xl rounded-2xl border border-[#44382c] bg-[#1a1613]/90 px-5 py-6 sm:px-7 sm:py-8 text-center"
+        >
+          <h2 id="about-troll-animation" className="text-lg sm:text-xl font-bold font-serif text-[#fbf7ee]">
+            Welcome to Troll Animation by Joven
+          </h2>
+          <p className="mt-3 text-sm leading-7 text-[#b9aa99]">
+            Troll Animation by Joven is a creative online studio for collecting and working with funny videos,
+            troll animations, memes, photos and custom stickers. Browse your media shelves, upload your own
+            creations, and use the editing tools to make a separate edited copy while keeping the original
+            media unchanged.
+          </p>
+          <div className="mt-5 grid gap-3 text-left sm:grid-cols-3">
+            <div className="rounded-xl border border-[#383028] bg-[#211b16] p-3">
+              <h3 className="text-sm font-semibold text-amber-300">Troll videos & animations</h3>
+              <p className="mt-1 text-xs leading-5 text-[#a89b8c]">Add and organize funny clips and animation videos in your studio vault.</p>
+            </div>
+            <div className="rounded-xl border border-[#383028] bg-[#211b16] p-3">
+              <h3 className="text-sm font-semibold text-amber-300">Memes, photos & stickers</h3>
+              <p className="mt-1 text-xs leading-5 text-[#a89b8c]">Keep creative artwork, meme images and custom emoji stickers together.</p>
+            </div>
+            <div className="rounded-xl border border-[#383028] bg-[#211b16] p-3">
+              <h3 className="text-sm font-semibold text-amber-300">Creative editing tools</h3>
+              <p className="mt-1 text-xs leading-5 text-[#a89b8c]">Edit your media and save new versions without replacing your originals.</p>
+            </div>
+          </div>
+        </section>
+
       </main>
 
       {/* Traditional Studio Footer */}
