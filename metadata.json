@@ -1,0 +1,6 @@
+{
+  "name": "MediaVault Studio",
+  "description": "A classic front-page media vault for videos, photos, and emojis featuring search, fast uploads, downloads, and a full-featured social media editing suite.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
