@@ -62,7 +62,7 @@ export async function getStoredMedia(): Promise<MediaItem[]> {
   try {
     const db = await openDB();
     return new Promise((resolve) => {
-      const tx = db.transaction(STORE_NAME, 'readonly');
+      const tx = db.transaction(STORE_NAME, 'readwrite');
       const store = tx.objectStore(STORE_NAME);
       const req = store.getAll();
       req.onsuccess = () => {
@@ -89,9 +89,18 @@ export async function getStoredMedia(): Promise<MediaItem[]> {
             return item;
           });
 
-          // Filter out legacy dummy entries if any exist
+          // Start every visit with an empty video gallery: remove saved video uploads
+          // from this browser's vault while preserving photos and custom emojis.
+          for (const item of restored) {
+            if (item.type === 'video') {
+              store.delete(item.id);
+            }
+          }
+
+          // Filter out legacy dummy entries and all videos.
           const sanitized = restored.filter(
             (i) =>
+              i.type !== 'video' &&
               !i.id.startsWith('vid-') &&
               !i.id.startsWith('emoji-troll-') &&
               !i.id.startsWith('emoji-1') &&
