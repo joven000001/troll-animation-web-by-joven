@@ -64,68 +64,81 @@ export async function getStoredMedia(): Promise<MediaItem[]> {
     return new Promise((resolve) => {
       const tx = db.transaction(STORE_NAME, 'readwrite');
       const store = tx.objectStore(STORE_NAME);
+      const cleanupKey = 'troll_animation_old_videos_cleared_v1';
+      let clearOldVideos = false;
+      try {
+        clearOldVideos = localStorage.getItem(cleanupKey) !== 'done';
+      } catch {
+        clearOldVideos = false;
+      }
+
+      tx.oncomplete = () => {
+        if (clearOldVideos) {
+          try {
+            localStorage.setItem(cleanupKey, 'done');
+          } catch {
+            // Ignore storage restrictions; cleanup still completed.
+          }
+        }
+      };
+
       const req = store.getAll();
       req.onsuccess = () => {
         const items = req.result as MediaItem[];
         if (!items || items.length === 0) {
           resolve([]);
-        } else {
-          // Re-hydrate any items that have stored blobs so their URLs are valid for this session
-          const restored = items.map((item) => {
-            if (item.blobData && item.blobData instanceof Blob) {
-              try {
-                item.url = URL.createObjectURL(item.blobData);
-              } catch (err) {
-                console.warn('Failed to re-create object URL for restored item', item.id, err);
-              }
-            }
-            if (item.thumbnailBlob && item.thumbnailBlob instanceof Blob) {
-              try {
-                item.thumbnailUrl = URL.createObjectURL(item.thumbnailBlob);
-              } catch (err) {
-                console.warn('Failed to re-create thumbnail URL for restored item', item.id, err);
-              }
-            }
-            return item;
-          });
+          return;
+        }
 
-          // Start every visit with an empty video gallery: remove saved video uploads
-          // from this browser's vault while preserving photos and custom emojis.
-          for (const item of restored) {
-            if (item.type === 'video') {
-              store.delete(item.id);
+        const restored = items.map((item) => {
+          if (item.blobData && item.blobData instanceof Blob) {
+            try {
+              item.url = URL.createObjectURL(item.blobData);
+            } catch (err) {
+              console.warn('Failed to re-create object URL for restored item', item.id, err);
             }
           }
+          if (item.thumbnailBlob && item.thumbnailBlob instanceof Blob) {
+            try {
+              item.thumbnailUrl = URL.createObjectURL(item.thumbnailBlob);
+            } catch (err) {
+              console.warn('Failed to re-create thumbnail URL for restored item', item.id, err);
+            }
+          }
+          return item;
+        });
 
-          // Filter out legacy dummy entries and all videos.
-          const sanitized = restored.filter(
-            (i) =>
-              i.type !== 'video' &&
-              !i.id.startsWith('vid-') &&
-              !i.id.startsWith('emoji-troll-') &&
-              !i.id.startsWith('emoji-1') &&
-              !i.id.startsWith('emoji-2') &&
-              !i.id.startsWith('emoji-3') &&
-              !i.id.startsWith('emoji-4') &&
-              !i.id.startsWith('emoji-5') &&
-              !i.id.startsWith('emoji-6') &&
-              !i.title.includes('Big Buck Bunny') &&
-              !i.title.includes('Sunset Blaze') &&
-              !i.title.includes('Tokyo Drift')
-          );
-          resolve(sanitized);
+        // Clear videos that were saved before this one-time cleanup, not future uploads.
+        if (clearOldVideos) {
+          for (const item of restored) {
+            if (item.type === 'video') store.delete(item.id);
+          }
         }
+
+        const sanitized = restored.filter(
+          (i) =>
+            !(clearOldVideos && i.type === 'video') &&
+            !i.id.startsWith('vid-') &&
+            !i.id.startsWith('emoji-troll-') &&
+            !i.id.startsWith('emoji-1') &&
+            !i.id.startsWith('emoji-2') &&
+            !i.id.startsWith('emoji-3') &&
+            !i.id.startsWith('emoji-4') &&
+            !i.id.startsWith('emoji-5') &&
+            !i.id.startsWith('emoji-6') &&
+            !i.title.includes('Big Buck Bunny') &&
+            !i.title.includes('Sunset Blaze') &&
+            !i.title.includes('Tokyo Drift')
+        );
+        resolve(sanitized);
       };
-      req.onerror = () => {
-        resolve([]);
-      };
+      req.onerror = () => resolve([]);
     });
   } catch (e) {
     console.warn('Falling back to empty initial items', e);
     return [];
   }
 }
-
 export async function saveMediaItem(item: MediaItem): Promise<void> {
   try {
     // If item has a session blob URL but no persistent blobData, extract it now
