@@ -141,14 +141,10 @@ export async function getStoredMedia(): Promise<MediaItem[]> {
 }
 export async function saveMediaItem(item: MediaItem): Promise<void> {
   try {
-    // If item has a session blob URL but no persistent blobData, extract it now
+    // Persist the original file Blob in IndexedDB so video uploads survive refreshes.
     if (!item.blobData && item.url && item.url.startsWith('blob:')) {
-      try {
-        const res = await fetch(item.url);
-        item.blobData = await res.blob();
-      } catch (err) {
-        console.warn('Could not extract blob from blob URL', err);
-      }
+      const res = await fetch(item.url);
+      item.blobData = await res.blob();
     }
 
     if (!item.thumbnailBlob && item.thumbnailUrl && item.thumbnailUrl.startsWith('blob:')) {
@@ -156,23 +152,26 @@ export async function saveMediaItem(item: MediaItem): Promise<void> {
         const res = await fetch(item.thumbnailUrl);
         item.thumbnailBlob = await res.blob();
       } catch {
-        // ignore
+        // A thumbnail is optional; the original media remains uploadable.
       }
     }
 
     const db = await openDB();
-    return new Promise((resolve, reject) => {
+    await new Promise<void>((resolve, reject) => {
       const tx = db.transaction(STORE_NAME, 'readwrite');
-      const store = tx.objectStore(STORE_NAME);
-      const req = store.put(item);
-      req.onsuccess = () => resolve();
-      req.onerror = () => reject(req.error);
+      tx.objectStore(STORE_NAME).put(item);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error || new Error('Could not save this media item.'));
+      tx.onabort = () => reject(tx.error || new Error('Storage is full or the media file could not be saved.'));
     });
   } catch (e) {
     console.error('Error saving media item', e);
+    if (e instanceof DOMException && e.name === 'QuotaExceededError') {
+      throw new Error('Your browser storage is full. Try a smaller MP4 file or free some browser storage.');
+    }
+    throw e instanceof Error ? e : new Error('Could not save this media item. Please try again.');
   }
 }
-
 export async function saveAllMedia(items: MediaItem[]): Promise<void> {
   try {
     const db = await openDB();
