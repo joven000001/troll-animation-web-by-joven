@@ -17,7 +17,7 @@ import { MediaItem, MediaType, UserProfile } from '../types/media';
 interface UploadModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onUploadSuccess: (item: MediaItem) => void;
+  onUploadSuccess: (item: MediaItem) => Promise<void> | void;
   profile: UserProfile;
   isOnline: boolean;
 }
@@ -130,62 +130,40 @@ export const UploadModal: React.FC<UploadModalProps> = ({
       setErrorMessage('Please provide a name/title for this media item.');
       return;
     }
-
     if (!isOnline) {
       setErrorMessage('You need to be online to upload media to the vault. Please check your internet connection.');
       return;
     }
-
-    if (selectedType !== 'emoji' && !file && !filePreviewUrl) {
+    if (selectedType !== 'emoji' && !file) {
       setErrorMessage(`Please select a ${selectedType} file to upload.`);
       return;
     }
 
     setIsProcessing(true);
-    setProgress(20);
+    setErrorMessage('');
+    setProgress(10);
 
-    // Simulated fast chunked upload progress
-    const timer = setInterval(() => {
-      setProgress((prev) => {
-        if (prev >= 90) {
-          clearInterval(timer);
-          return 95;
+    try {
+      let mediaUrl = filePreviewUrl;
+      let format = selectedType.toUpperCase();
+      let fileSizeStr = '1.0 MB';
+
+      if (file) {
+        format = file.name.split('.').pop()?.toUpperCase() || selectedType.toUpperCase();
+        fileSizeStr = `${(file.size / (1024 * 1024)).toFixed(1)} MB`;
+        if (selectedType === 'photo' && file.size < 8 * 1024 * 1024) {
+          mediaUrl = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result as string);
+            reader.onerror = () => reject(new Error('Could not read the selected photo.'));
+            reader.readAsDataURL(file);
+          });
         }
-        return prev + 25;
-      });
-    }, 80);
-
-    // Process file into permanent DataURL or Blob store
-    let mediaUrl = filePreviewUrl;
-    let format = selectedType.toUpperCase();
-    let fileSizeStr = '1.0 MB';
-
-    if (file) {
-      format = file.name.split('.').pop()?.toUpperCase() || selectedType.toUpperCase();
-      const mb = (file.size / (1024 * 1024)).toFixed(1);
-      fileSizeStr = `${mb} MB`;
-
-      // Read as DataURL for photos, or keep objectURL / blob for large videos
-      if (selectedType === 'photo' && file.size < 8 * 1024 * 1024) {
-        mediaUrl = await new Promise<string>((resolve) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(reader.result as string);
-          reader.readAsDataURL(file);
-        });
       }
-    }
 
-    const tags = tagsInput
-      .split(',')
-      .map((t) => t.trim())
-      .filter(Boolean);
-    if (tags.length === 0) {
-      tags.push(selectedType.charAt(0).toUpperCase() + selectedType.slice(1));
-    }
-
-    setTimeout(() => {
-      clearInterval(timer);
-      setProgress(100);
+      setProgress(45);
+      const tags = tagsInput.split(',').map((t) => t.trim()).filter(Boolean);
+      if (tags.length === 0) tags.push(selectedType.charAt(0).toUpperCase() + selectedType.slice(1));
 
       const newItem: MediaItem = {
         id: `${selectedType}-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
@@ -204,10 +182,16 @@ export const UploadModal: React.FC<UploadModalProps> = ({
         blobData: file || undefined,
       };
 
-      onUploadSuccess(newItem);
+      setProgress(70);
+      await onUploadSuccess(newItem);
+      setProgress(100);
       setIsProcessing(false);
       handleClose();
-    }, 450);
+    } catch (error) {
+      console.error('Media upload failed:', error);
+      setIsProcessing(false);
+      setErrorMessage(error instanceof Error ? error.message : 'Upload failed. Please try a smaller MP4 file and try again.');
+    }
   };
 
   return (
