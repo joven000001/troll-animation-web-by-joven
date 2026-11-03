@@ -666,33 +666,48 @@ export const MediaViewModal: React.FC<MediaViewModalProps> = ({
           </div>
         ) : (
           /* Details Panel */
-          <div className="p-4 sm:p-5 border-t border-[#342a20] bg-[#14100d] flex flex-wrap items-center justify-between gap-4 text-xs text-[#a89b8c]">
-            <div className="flex flex-wrap items-center gap-4">
-              <div className="flex items-center gap-1.5">
-                <User className="w-3.5 h-3.5 text-amber-400" />
-                <span>Created by <strong className="text-[#fbf7ee]">{item.author}</strong></span>
+          <div className="p-4 sm:p-5 border-t border-[#342a20] bg-[#14100d] flex flex-col gap-3.5 text-xs text-[#a89b8c]">
+            {item.description && (
+              <div className="p-3 rounded-xl bg-[#1b1612] border border-[#3c3125] text-left">
+                <span className="text-[11px] font-bold text-amber-400 block mb-1 font-serif">Description</span>
+                <p className="text-xs text-[#ede8df] leading-relaxed whitespace-pre-wrap">{item.description}</p>
               </div>
+            )}
 
-              <div className="flex items-center gap-1.5">
-                <Calendar className="w-3.5 h-3.5 text-amber-400" />
-                <span>{new Date(item.createdAt).toLocaleDateString()}</span>
-              </div>
-
-              {item.resolution && (
-                <div className="px-2 py-0.5 rounded bg-[#221c17] text-amber-200 font-mono text-[11px] border border-[#3e3328]">
-                  {item.resolution}
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div className="flex flex-wrap items-center gap-4">
+                <div className="flex items-center gap-1.5">
+                  <User className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Uploader: <strong className="text-[#fbf7ee]">{item.uploaderName || item.author}</strong></span>
                 </div>
-              )}
-            </div>
 
-            <div className="flex items-center gap-1.5">
-              <Tag className="w-3.5 h-3.5 text-amber-400" />
-              <div className="flex flex-wrap gap-1">
-                {item.tags.map((t, i) => (
-                  <span key={i} className="px-2 py-0.5 rounded bg-[#241e19] border border-[#3e3428] text-[#dcd3c5] text-[11px]">
-                    #{t}
-                  </span>
-                ))}
+                <div className="flex items-center gap-1.5">
+                  <Calendar className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Uploaded: {new Date(item.createdAt).toLocaleDateString()}</span>
+                </div>
+
+                {item.fileSize && (
+                  <div className="px-2 py-0.5 rounded bg-[#221c17] text-zinc-300 font-mono text-[11px] border border-[#3e3328]">
+                    {item.fileSize}
+                  </div>
+                )}
+
+                {item.resolution && (
+                  <div className="px-2 py-0.5 rounded bg-[#221c17] text-amber-200 font-mono text-[11px] border border-[#3e3328]">
+                    {item.resolution}
+                  </div>
+                )}
+              </div>
+
+              <div className="flex items-center gap-1.5">
+                <Tag className="w-3.5 h-3.5 text-amber-400" />
+                <div className="flex flex-wrap gap-1">
+                  {item.tags.map((t, i) => (
+                    <span key={i} className="px-2 py-0.5 rounded bg-[#241e19] border border-[#3e3428] text-[#dcd3c5] text-[11px]">
+                      #{t}
+                    </span>
+                  ))}
+                </div>
               </div>
             </div>
           </div>

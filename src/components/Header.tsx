@@ -3,12 +3,17 @@ import { Download, Film, User, Wifi, WifiOff, Sparkles, Layers, ArrowDownToLine 
 import { UserProfile } from '../types/media';
 import { downloadManager } from '../services/downloadManager';
 
+import { User as FirebaseUser } from 'firebase/auth';
+
 interface HeaderProps {
   profile: UserProfile;
   isOnline: boolean;
   onOpenProfile: () => void;
   onOpenInstall: () => void;
   onOpenDownloadManager: () => void;
+  currentUser?: FirebaseUser | null;
+  onSignInGoogle?: () => void;
+  onSignOut?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -17,6 +22,9 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenProfile,
   onOpenInstall,
   onOpenDownloadManager,
+  currentUser,
+  onSignInGoogle,
+  onSignOut,
 }) => {
   const [imgError, setImgError] = useState(false);
   const [activeDownloadCount, setActiveDownloadCount] = useState(0);
@@ -89,6 +97,45 @@ export const Header: React.FC<HeaderProps> = ({
               <span className="text-[10px] text-[#8e8071] hidden sm:inline">Vault</span>
             )}
           </button>
+
+          {/* Google Auth Status / 1-Click Sign-in for Visitors */}
+          {currentUser ? (
+            <div className="flex items-center gap-1.5 px-2 py-1 rounded-xl bg-[#201a14] border border-emerald-600/40 shrink-0">
+              <div className="w-6 h-6 rounded-lg overflow-hidden bg-zinc-900 ring-1 ring-emerald-500/60 flex items-center justify-center shrink-0">
+                {currentUser.photoURL ? (
+                  <img src={currentUser.photoURL} alt={currentUser.displayName || 'Google'} className="w-full h-full object-cover" />
+                ) : (
+                  <User className="w-3.5 h-3.5 text-emerald-400" />
+                )}
+              </div>
+              <span className="text-[11px] font-semibold text-emerald-300 hidden md:inline truncate max-w-[100px]">
+                {currentUser.displayName?.split(' ')[0] || 'Google User'}
+              </span>
+              {onSignOut && (
+                <button
+                  type="button"
+                  onClick={onSignOut}
+                  className="text-[10px] text-[#9c8e7e] hover:text-rose-400 ml-1 transition"
+                  title="Sign out of Google"
+                >
+                  Exit
+                </button>
+              )}
+            </div>
+          ) : (
+            onSignInGoogle && (
+              <button
+                type="button"
+                onClick={onSignInGoogle}
+                className="flex items-center gap-1.5 px-2 sm:px-2.5 py-1.5 rounded-lg sm:rounded-xl bg-[#231b14] hover:bg-[#2e2319] text-amber-300 border border-amber-700/60 text-xs font-semibold transition shrink-0 active:scale-95 shadow-sm"
+                title="Sign in with Google to protect your shared videos"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                <span className="hidden sm:inline">Google Login</span>
+                <span className="sm:hidden text-[10px]">Login</span>
+              </button>
+            )
+          )}
 
           {/* Profile Section (always clearly visible with avatar, name, and handle) */}
           <button

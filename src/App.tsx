@@ -12,7 +12,8 @@ import {
   Search,
   CheckCircle2,
   User,
-  Edit3
+  Edit3,
+  Globe
 } from 'lucide-react';
 import { MediaItem, MediaType, UserProfile } from './types/media';
 import { 
@@ -34,12 +35,29 @@ import { InstallModal } from './components/InstallModal';
 import { DownloadManagerModal } from './components/DownloadManagerModal';
 import { EditorStudio } from './components/editor/EditorStudio';
 import { MemeGifModal } from './components/MemeGifModal';
+import { 
+  auth, 
+  testConnection, 
+  signInWithGoogle, 
+  logOut, 
+  getVisitorId 
+} from './services/firebase';
+import { 
+  subscribeToVideoGallery, 
+  deleteVideoFromGallery 
+} from './services/videoGallery';
+import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
 
 export default function App() {
   const isOnline = useOnlineStatus();
 
-  // State
-  const [mediaItems, setMediaItems] = useState<MediaItem[]>([]);
+  // Authentication & Visitor Identity state
+  const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);
+  const [visitorId, setVisitorId] = useState<string>('');
+
+  // Media state: online shared videos + local photos/emojis
+  const [onlineVideos, setOnlineVideos] = useState<MediaItem[]>([]);
+  const [localMedia, setLocalMedia] = useState<MediaItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [profile, setProfile] = useState<UserProfile>(DEFAULT_PROFILE);
 
@@ -57,27 +75,78 @@ export default function App() {
   const [memeGifItem, setMemeGifItem] = useState<MediaItem | null>(null);
   const [notificationToast, setNotificationToast] = useState<string | null>(null);
 
-  // Load media & profile
-  useEffect(() => {
-    async function loadData() {
-      setIsLoading(true);
-      try {
-        const stored = await getStoredMedia();
-        setMediaItems(stored);
-        setProfile(getStoredProfile());
-      } catch (err) {
-        console.error('Failed to load media vault', err);
-      } finally {
-        setIsLoading(false);
-      }
-    }
-    loadData();
-  }, []);
-
   const showToast = (message: string) => {
     setNotificationToast(message);
-    setTimeout(() => setNotificationToast(null), 3500);
+    setTimeout(() => setNotificationToast(null), 4000);
   };
+
+  // Google Sign-In & Sign-Out handlers
+  const handleSignInGoogle = async () => {
+    try {
+      const user = await signInWithGoogle();
+      setCurrentUser(user);
+      showToast(`Signed in as ${user.displayName || user.email}!`);
+    } catch (err: any) {
+      if (err?.code !== 'auth/popup-closed-by-user') {
+        showToast('Google Sign-in failed. Please try again.');
+      }
+    }
+  };
+
+  const handleSignOutGoogle = async () => {
+    try {
+      await logOut();
+      setCurrentUser(null);
+      showToast('Signed out from Google.');
+    } catch (err) {
+      showToast('Sign out failed.');
+    }
+  };
+
+  // 1. Initial Connection Validation and Auth Listener
+  useEffect(() => {
+    testConnection();
+    setVisitorId(getVisitorId());
+
+    const unsubAuth = onAuthStateChanged(auth, (user) => {
+      setCurrentUser(user);
+    });
+
+    return () => unsubAuth();
+  }, []);
+
+  // 2. Real-time subscription to shared online video gallery in Cloud Firestore
+  useEffect(() => {
+    const unsubscribe = subscribeToVideoGallery(
+      (videos) => {
+        setOnlineVideos(videos);
+        setIsLoading(false);
+      },
+      (error) => {
+        console.warn('Real-time video gallery note:', error);
+        setIsLoading(false);
+      }
+    );
+
+    return () => unsubscribe();
+  }, []);
+
+  // 3. Load local photos, emojis, and artist profile from storage
+  useEffect(() => {
+    async function loadLocalData() {
+      try {
+        const stored = await getStoredMedia();
+        // Requirement 11: Do not use IndexedDB as main video storage
+        // Only load photos and emojis into local vault
+        const nonVideos = stored.filter((i) => i.type !== 'video');
+        setLocalMedia(nonVideos);
+        setProfile(getStoredProfile());
+      } catch (err) {
+        console.error('Failed to load local media vault', err);
+      }
+    }
+    loadLocalData();
+  }, []);
 
   const handleSaveProfile = (updated: UserProfile) => {
     setProfile(updated);
@@ -85,42 +154,77 @@ export default function App() {
     showToast('Profile updated successfully!');
   };
 
-  // Upload handler
+  // Upload handler (videos go to Firebase online gallery; photos/emojis to local vault)
   const handleUploadSuccess = async (newItem: MediaItem) => {
-    await saveMediaItem(newItem);
-    setMediaItems((prev) => [newItem, ...prev]);
-    showToast(`Added "${newItem.title}" to your vault!`);
-  };
-
-  // Delete handler
-  const handleDeleteMedia = async (id: string) => {
-    if (window.confirm('Delete this item from your Troll Animation vault?')) {
-      await deleteMediaItem(id);
-      setMediaItems((prev) => prev.filter((item) => item.id !== id));
-      if (viewingItem?.id === id) setViewingItem(null);
-      if (editingItem?.id === id) setEditingItem(null);
-      showToast('Item deleted.');
+    if (newItem.type === 'video') {
+      showToast(`Uploaded "${newItem.title}" to shared online gallery!`);
+    } else {
+      await saveMediaItem(newItem);
+      setLocalMedia((prev) => [newItem, ...prev]);
+      showToast(`Added "${newItem.title}" to your vault!`);
     }
   };
 
-  // CRITICAL: When someone edits a video/photo/emoji, save it as a NEW separate item
-  // while KEEPING THE ORIGINAL VIDEO UNTOUCHED!
+  // Delete handler with ownership enforcement (Requirement 10)
+  const handleDeleteMedia = async (id: string) => {
+    const target = mediaItems.find((item) => item.id === id);
+    if (!target) return;
+
+    if (target.type === 'video') {
+      const canDelete =
+        (currentUser && target.uploaderId === currentUser.uid) ||
+        (visitorId && target.uploaderId === visitorId);
+
+      if (!canDelete) {
+        showToast('Protected: Only the original creator who uploaded this video can delete it.');
+        return;
+      }
+
+      if (window.confirm(`Delete "${target.title}" from the shared online gallery?`)) {
+        try {
+          await deleteVideoFromGallery(target, currentUser?.uid);
+          showToast(`Deleted "${target.title}" from online gallery.`);
+          if (viewingItem?.id === id) setViewingItem(null);
+          if (editingItem?.id === id) setEditingItem(null);
+        } catch (err: any) {
+          console.error('Failed to delete video:', err);
+          showToast(err.message || 'Permission denied: Could not delete video.');
+        }
+      }
+    } else {
+      if (window.confirm('Delete this item from your Troll Animation vault?')) {
+        await deleteMediaItem(id);
+        setLocalMedia((prev) => prev.filter((item) => item.id !== id));
+        if (viewingItem?.id === id) setViewingItem(null);
+        if (editingItem?.id === id) setEditingItem(null);
+        showToast('Item deleted.');
+      }
+    }
+  };
+
+  // When someone edits a video/photo/emoji, save as a new copy while keeping original untouched
   const handleSaveEditedItem = async (newEditedCopy: MediaItem) => {
     await saveMediaItem(newEditedCopy);
-    // Prepend new edited copy so both the new edited version AND original video remain intact!
-    setMediaItems((prev) => [newEditedCopy, ...prev]);
+    setLocalMedia((prev) => [newEditedCopy, ...prev]);
     setEditingItem(null);
     showToast(`Saved as a new copy: "${newEditedCopy.title}" (Original remains untouched!)`);
   };
 
-  // Update media item (e.g. when comments are added or removed)
+  // Update media item (e.g. comments)
   const handleUpdateMediaItem = async (updatedItem: MediaItem) => {
-    await saveMediaItem(updatedItem);
-    setMediaItems((prev) => prev.map((item) => (item.id === updatedItem.id ? updatedItem : item)));
+    if (updatedItem.type !== 'video') {
+      await saveMediaItem(updatedItem);
+      setLocalMedia((prev) => prev.map((item) => (item.id === updatedItem.id ? updatedItem : item)));
+    }
     if (viewingItem?.id === updatedItem.id) {
       setViewingItem(updatedItem);
     }
   };
+
+  // Combined media items: online shared videos + local photos and emojis
+  const mediaItems = useMemo(() => {
+    return [...onlineVideos, ...localMedia];
+  }, [onlineVideos, localMedia]);
 
   // Filter items by search query
   const filteredItems = useMemo(() => {
@@ -128,15 +232,16 @@ export default function App() {
     const q = searchQuery.toLowerCase().trim();
     return mediaItems.filter((item) => {
       const titleMatch = item.title.toLowerCase().includes(q);
+      const descMatch = (item.description || '').toLowerCase().includes(q);
       const tagMatch = item.tags.some((t) => t.toLowerCase().includes(q));
-      const authorMatch = item.author.toLowerCase().includes(q);
+      const authorMatch = (item.uploaderName || item.author).toLowerCase().includes(q);
       const typeMatch = item.type.toLowerCase().includes(q);
       const emojiMatch = item.emojiSymbol ? item.emojiSymbol.includes(q) : false;
-      return titleMatch || tagMatch || authorMatch || typeMatch || emojiMatch;
+      return titleMatch || descMatch || tagMatch || authorMatch || typeMatch || emojiMatch;
     });
   }, [mediaItems, searchQuery]);
 
-  // Group items by category for horizontal sideways scrolling
+  // Group items by category for horizontal shelves
   const videoItems = useMemo(
     () => filteredItems.filter((i) => i.type === 'video'),
     [filteredItems]
@@ -165,6 +270,9 @@ export default function App() {
         onOpenProfile={() => setIsProfileOpen(true)}
         onOpenInstall={() => setIsInstallOpen(true)}
         onOpenDownloadManager={() => setIsDownloadManagerOpen(true)}
+        currentUser={currentUser}
+        onSignInGoogle={handleSignInGoogle}
+        onSignOut={handleSignOutGoogle}
       />
 
       {/* Main Container - strictly bound to viewport width */}
@@ -176,13 +284,18 @@ export default function App() {
             <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[#27201a] border border-[#3e3428] text-[10px] sm:text-xs text-amber-400 font-serif mb-0.5">
               <span>★</span>
               <span>Traditional Motion & Celluloid Workshop</span>
+              <span className="text-[#6d5e4f]">·</span>
+              <span className="text-emerald-400 flex items-center gap-1 font-sans">
+                <Globe className="w-3 h-3" />
+                Live Shared Online Gallery
+              </span>
             </div>
             <h1 className="text-xl sm:text-3xl md:text-4xl font-bold text-[#fbf7ee] font-serif tracking-tight flex items-center justify-center sm:justify-start gap-2">
               <span>Troll Animation Studio</span>
               <span className="text-xl sm:text-2xl filter drop-shadow">😈</span>
             </h1>
             <p className="text-xs sm:text-sm text-[#a89b8c] max-w-xl">
-              Browse sideways shelves of videos, artwork, and custom stickers. Edit any piece with non-destructive tools while keeping your originals completely untouched.
+              Browse sideways shelves of shared online videos, artwork, and custom stickers. Upload your troll animation to share with all visitors across devices.
             </p>
           </div>
 
@@ -251,15 +364,15 @@ export default function App() {
         {isLoading ? (
           <div className="flex flex-col items-center justify-center py-20 space-y-3">
             <RefreshCw className="w-8 h-8 text-amber-500 animate-spin" />
-            <p className="text-sm text-[#a89b8c] font-serif">Opening animation vaults...</p>
+            <p className="text-sm text-[#a89b8c] font-serif">Connecting to shared video vault in Cloud Firestore...</p>
           </div>
         ) : (
           /* THE THREE SIDEWAYS SCROLLING ROWS: VIDEOS, PHOTOS, EMOJIS */
           <div className="space-y-8 sm:space-y-10 w-full max-w-full overflow-hidden">
             
-            {/* ROW 1: VIDEOS (Scrolled Sideways) */}
+            {/* ROW 1: VIDEOS (Real-time Cloud Firestore Shared Public Gallery) */}
             <HorizontalMediaRow
-              title="Videos & Troll Animations"
+              title="Shared Troll Videos & Animations"
               type="video"
               items={videoItems}
               onView={(item) => setViewingItem(item)}
@@ -267,6 +380,8 @@ export default function App() {
               onDelete={handleDeleteMedia}
               onOpenUpload={handleOpenUploadWithType}
               onOpenMemeGif={(item) => setMemeGifItem(item)}
+              currentUserId={currentUser?.uid}
+              visitorId={visitorId}
             />
 
             {/* ROW 2: PHOTOS (Scrolled Sideways) */}
@@ -278,6 +393,8 @@ export default function App() {
               onEdit={(item) => setEditingItem(item)}
               onDelete={handleDeleteMedia}
               onOpenUpload={handleOpenUploadWithType}
+              currentUserId={currentUser?.uid}
+              visitorId={visitorId}
             />
 
             {/* ROW 3: EMOJIS (Scrolled Sideways) */}
@@ -289,6 +406,8 @@ export default function App() {
               onEdit={(item) => setEditingItem(item)}
               onDelete={handleDeleteMedia}
               onOpenUpload={handleOpenUploadWithType}
+              currentUserId={currentUser?.uid}
+              visitorId={visitorId}
             />
 
           </div>
@@ -305,12 +424,12 @@ export default function App() {
               <div className="min-w-0">
                 <h3 className="text-base sm:text-lg font-bold text-[#fbf7ee] font-serif flex items-center justify-center md:justify-start gap-2 flex-wrap">
                   <span>Upload to Studio Vault</span>
-                  <span className="text-[10px] font-sans font-semibold px-2 py-0.5 rounded-full bg-amber-950/70 text-amber-300 border border-amber-800/60">
-                    Bottom Action Bar
+                  <span className="text-[10px] font-sans font-semibold px-2 py-0.5 rounded-full bg-emerald-950/70 text-emerald-300 border border-emerald-800/60">
+                    Online Cloud Gallery Active
                   </span>
                 </h3>
                 <p className="text-xs sm:text-sm text-[#a89b8c] mt-0.5">
-                  Import animation clips, high-res photos, or emojis. Supports fast PC & mobile multi-format export.
+                  Import animation clips to the shared online gallery, or add high-res photos and emojis. Accessible across all browsers and devices.
                 </p>
               </div>
             </div>
@@ -363,21 +482,20 @@ export default function App() {
           </h2>
           <p className="mt-3 text-sm leading-7 text-[#b9aa99]">
             Troll Animation by Joven is a creative online studio for collecting and working with funny videos,
-            troll animations, memes, photos and custom stickers. Browse your media shelves, upload your own
-            creations, and use the editing tools to make a separate edited copy while keeping the original
-            media unchanged.
+            troll animations, memes, photos and custom stickers. All visitors share the same online video gallery powered by Firebase,
+            meaning any animation you upload is instantly visible across all devices.
           </p>
           <div className="mt-5 grid gap-3 text-left sm:grid-cols-3">
             <div className="rounded-xl border border-[#383028] bg-[#211b16] p-3">
-              <h3 className="text-sm font-semibold text-amber-300">Troll videos & animations</h3>
-              <p className="mt-1 text-xs leading-5 text-[#a89b8c]">Add and organize funny clips and animation videos in your studio vault.</p>
+              <h3 className="text-sm font-semibold text-amber-300">Shared Online Gallery</h3>
+              <p className="mt-1 text-xs leading-5 text-[#a89b8c]">All visitors see the same shared video gallery with real-time updates.</p>
             </div>
             <div className="rounded-xl border border-[#383028] bg-[#211b16] p-3">
-              <h3 className="text-sm font-semibold text-amber-300">Memes, photos & stickers</h3>
-              <p className="mt-1 text-xs leading-5 text-[#a89b8c]">Keep creative artwork, meme images and custom emoji stickers together.</p>
+              <h3 className="text-sm font-semibold text-amber-300">Protected Video Deletion</h3>
+              <p className="mt-1 text-xs leading-5 text-[#a89b8c]">Only the creator who uploaded a video can delete it. Visitors cannot delete other creators&apos; work.</p>
             </div>
             <div className="rounded-xl border border-[#383028] bg-[#211b16] p-3">
-              <h3 className="text-sm font-semibold text-amber-300">Creative editing tools</h3>
+              <h3 className="text-sm font-semibold text-amber-300">Creative Editing Tools</h3>
               <p className="mt-1 text-xs leading-5 text-[#a89b8c]">Edit your media and save new versions without replacing your originals.</p>
             </div>
           </div>
@@ -390,7 +508,7 @@ export default function App() {
         <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2.5">
           <p className="font-serif">Troll Animation — Traditional Cell & Media Studio</p>
           <div className="flex items-center gap-3 text-[#796c5e] text-[11px]">
-            <span>Sideways Reel Shelves</span>
+            <span>Firebase Online Gallery</span>
             <span>·</span>
             <span>Original Media Preserved</span>
           </div>
@@ -405,13 +523,16 @@ export default function App() {
         </div>
       )}
 
-      {/* Upload Modal (opens when upload button at bottom is clicked) */}
+      {/* Upload Modal (opens when upload button is clicked) */}
       <UploadModal
         isOpen={isUploadOpen}
         onClose={() => setIsUploadOpen(false)}
         onUploadSuccess={handleUploadSuccess}
         profile={profile}
         isOnline={isOnline}
+        currentUser={currentUser}
+        visitorId={visitorId}
+        onSignInGoogle={handleSignInGoogle}
       />
 
       {/* Cinema Watcher / Lightbox */}

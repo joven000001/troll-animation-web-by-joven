@@ -11,7 +11,9 @@ import {
   Check, 
   Sparkles,
   ArrowDownToLine,
-  MessageSquare
+  MessageSquare,
+  User,
+  Lock
 } from 'lucide-react';
 import { MediaItem } from '../types/media';
 import { downloadManager } from '../services/downloadManager';
@@ -22,6 +24,8 @@ interface MediaCardProps {
   onEdit: (item: MediaItem) => void;
   onDelete: (id: string) => void;
   onOpenMemeGif?: (item: MediaItem) => void;
+  currentUserId?: string;
+  visitorId?: string;
 }
 
 export const MediaCard: React.FC<MediaCardProps> = ({
@@ -30,6 +34,8 @@ export const MediaCard: React.FC<MediaCardProps> = ({
   onEdit,
   onDelete,
   onOpenMemeGif,
+  currentUserId,
+  visitorId,
 }) => {
   const [isHovered, setIsHovered] = useState(false);
   const [downloading, setDownloading] = useState(false);
@@ -192,6 +198,17 @@ export const MediaCard: React.FC<MediaCardProps> = ({
               </span>
             ))}
           </div>
+
+          {/* Uploader and Upload Date metadata (Requirement 2 & 10) */}
+          <div className="flex items-center justify-between text-[10px] text-[#9c8e7e] mt-1.5 pt-1.5 border-t border-[#2d241c]">
+            <span className="truncate max-w-[130px] flex items-center gap-1 text-amber-200/90 font-medium" title={item.uploaderName || item.author}>
+              <User className="w-2.5 h-2.5 text-amber-400 shrink-0" />
+              <span className="truncate">{item.uploaderName || item.author || 'Troll Creator'}</span>
+            </span>
+            <span className="shrink-0 font-mono text-[9px] text-[#8e8071]">
+              {new Date(item.createdAt).toLocaleDateString()}
+            </span>
+          </div>
         </div>
 
         {/* Actions - tightly fitted for mobile touch */}
@@ -258,14 +275,24 @@ export const MediaCard: React.FC<MediaCardProps> = ({
               )}
             </button>
 
-            <button
-              onClick={() => onDelete(item.id)}
-              type="button"
-              className="p-1.5 rounded-md sm:rounded-lg text-[#7c6f60] hover:text-rose-400 hover:bg-[#2b241d] transition"
-              title="Delete from Vault"
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-            </button>
+            {/* Deletion protection: Only creator can delete their video (Requirement 10) */}
+            {(item.type !== 'video' || (currentUserId && item.uploaderId === currentUserId) || (visitorId && item.uploaderId === visitorId)) ? (
+              <button
+                onClick={() => onDelete(item.id)}
+                type="button"
+                className="p-1.5 rounded-md sm:rounded-lg text-[#7c6f60] hover:text-rose-400 hover:bg-[#2b241d] transition"
+                title="Delete from Vault"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            ) : (
+              <span
+                className="p-1.5 text-[#54483d] cursor-not-allowed"
+                title="Protected: Only the original creator can delete this shared video"
+              >
+                <Lock className="w-3.5 h-3.5 opacity-50" />
+              </span>
+            )}
           </div>
 
         </div>

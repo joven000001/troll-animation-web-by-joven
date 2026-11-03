@@ -1,0 +1,70 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default-deny catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Hardened Primitives
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // Video Entity Validation helper enforcing strict schema and boundary limits
+    function isValidVideo(data) {
+      return data.keys().hasAll(['title', 'uploaderName', 'uploaderId', 'storageUrl', 'createdAt', 'type'])
+        && data.keys().hasOnly(['title', 'description', 'uploaderName', 'uploaderId', 'storageUrl', 'storagePath', 'thumbnailUrl', 'createdAt', 'type', 'tags', 'format', 'fileSize', 'duration'])
+        && data.title is string && data.title.size() >= 1 && data.title.size() <= 100
+        && (!('description' in data) || (data.description is string && data.description.size() <= 1000))
+        && data.uploaderName is string && data.uploaderName.size() >= 1 && data.uploaderName.size() <= 100
+        && data.uploaderId is string && data.uploaderId.size() >= 1 && data.uploaderId.size() <= 128
+        && data.storageUrl is string && data.storageUrl.size() >= 1 && data.storageUrl.size() <= 1048576
+        && (!('storagePath' in data) || (data.storagePath is string && data.storagePath.size() <= 512))
+        && (!('thumbnailUrl' in data) || (data.thumbnailUrl is string && data.thumbnailUrl.size() <= 2048))
+        && data.createdAt is string && data.createdAt.size() <= 64
+        && data.type == 'video'
+        && (!('tags' in data) || (data.tags is list && data.tags.size() <= 20))
+        && (!('format' in data) || (data.format is string && data.format.size() <= 20))
+        && (!('fileSize' in data) || (data.fileSize is string && data.fileSize.size() <= 30))
+        && (!('duration' in data) || (data.duration is number));
+    }
+
+    // Shared public video gallery collection
+    match /videos/{videoId} {
+      // 1. Read: Public read access for all visitors (split get and list so list queries succeed)
+      allow get: if isValidId(videoId);
+      allow list: if true;
+
+      // 2. Create: Open creation for visitors, enforcing UID matching when signed in
+      allow create: if isValidId(videoId)
+        && isValidVideo(incoming())
+        && (isSignedIn() ? incoming().uploaderId == request.auth.uid : true);
+
+      // 3. Update: Only uploader can update their own video; immutable identity and creation date
+      allow update: if isValidId(videoId)
+        && isSignedIn()
+        && resource.data.uploaderId == request.auth.uid
+        && isValidVideo(incoming())
+        && incoming().uploaderId == existing().uploaderId
+        && incoming().createdAt == existing().createdAt;
+
+      // 4. Delete: Only original uploader can delete their video; no one can delete other people's videos
+      allow delete: if isValidId(videoId)
+        && isSignedIn()
+        && resource.data.uploaderId == request.auth.uid;
+    }
+  }
+}

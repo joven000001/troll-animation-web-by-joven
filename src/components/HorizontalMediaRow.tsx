@@ -21,6 +21,8 @@ interface HorizontalMediaRowProps {
   onDelete: (id: string) => void;
   onOpenUpload: (defaultType?: MediaType) => void;
   onOpenMemeGif?: (item: MediaItem) => void;
+  currentUserId?: string;
+  visitorId?: string;
 }
 
 export const HorizontalMediaRow: React.FC<HorizontalMediaRowProps> = ({
@@ -32,6 +34,8 @@ export const HorizontalMediaRow: React.FC<HorizontalMediaRowProps> = ({
   onDelete,
   onOpenUpload,
   onOpenMemeGif,
+  currentUserId,
+  visitorId,
 }) => {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
@@ -77,9 +81,15 @@ export const HorizontalMediaRow: React.FC<HorizontalMediaRowProps> = ({
               <span className="text-[10px] sm:text-xs font-semibold px-2 py-0.5 rounded-full bg-[#241e19] text-amber-300 border border-[#3e3428] shrink-0">
                 {items.length}
               </span>
+              {type === 'video' && (
+                <span className="text-[9px] sm:text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-emerald-950/60 text-emerald-300 border border-emerald-800/60 shrink-0 flex items-center gap-1" title="Connected to Cloud Firestore & Firebase Storage: updates live for all visitors">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  <span>Shared Online Gallery</span>
+                </span>
+              )}
             </div>
             <p className="text-[10px] sm:text-[11px] text-[#9c8e7e] hidden sm:block">
-              Traditional reel gallery · Swipe sideways
+              {type === 'video' ? 'Real-time shared video vault · Visible to all visitors across devices' : 'Traditional reel gallery · Swipe sideways'}
             </p>
           </div>
         </div>
@@ -150,6 +160,8 @@ export const HorizontalMediaRow: React.FC<HorizontalMediaRowProps> = ({
                 onEdit={onEdit}
                 onDelete={onDelete}
                 onOpenMemeGif={onOpenMemeGif}
+                currentUserId={currentUserId}
+                visitorId={visitorId}
               />
             </div>
           ))

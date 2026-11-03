@@ -1,0 +1,86 @@
+{
+  "entities": {
+    "video": {
+      "title": "Video",
+      "description": "Shared online troll animation and video metadata",
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string",
+          "description": "Title of the video",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "description": {
+          "type": "string",
+          "description": "Description of the video",
+          "maxLength": 1000
+        },
+        "uploaderName": {
+          "type": "string",
+          "description": "Display name of uploader",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "uploaderId": {
+          "type": "string",
+          "description": "Unique identifier of the uploader",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "storageUrl": {
+          "type": "string",
+          "description": "Firebase Storage download URL or hosted video media URL",
+          "minLength": 1,
+          "maxLength": 1048576
+        },
+        "storagePath": {
+          "type": "string",
+          "description": "Path in Firebase Storage where video binary is stored",
+          "maxLength": 512
+        },
+        "thumbnailUrl": {
+          "type": "string",
+          "description": "Thumbnail image URL",
+          "maxLength": 2048
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Upload date timestamp in ISO format",
+          "maxLength": 64
+        },
+        "tags": {
+          "type": "array",
+          "description": "Tags associated with the video animation"
+        },
+        "type": {
+          "type": "string",
+          "description": "Media type discriminator",
+          "enum": ["video"]
+        },
+        "format": {
+          "type": "string",
+          "description": "Video format (e.g. MP4, WEBM)",
+          "maxLength": 20
+        },
+        "fileSize": {
+          "type": "string",
+          "description": "Human readable file size",
+          "maxLength": 30
+        },
+        "duration": {
+          "type": "number",
+          "description": "Duration in seconds"
+        }
+      },
+      "required": ["title", "uploaderName", "uploaderId", "storageUrl", "createdAt", "type"]
+    }
+  },
+  "firestore": {
+    "/videos/{videoId}": {
+      "schema": "video",
+      "description": "Public shared video vault accessible to all visitors"
+    }
+  }
+}

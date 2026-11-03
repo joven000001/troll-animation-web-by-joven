@@ -10,9 +10,14 @@ import {
   FileText,
   Tag,
   Sparkles,
-  WifiOff
+  WifiOff,
+  User,
+  AlignLeft
 } from 'lucide-react';
 import { MediaItem, MediaType, UserProfile } from '../types/media';
+import { uploadVideoToGallery } from '../services/videoGallery';
+import { getVisitorId } from '../services/firebase';
+import { User as FirebaseUser } from 'firebase/auth';
 
 interface UploadModalProps {
   isOpen: boolean;
@@ -20,6 +25,9 @@ interface UploadModalProps {
   onUploadSuccess: (item: MediaItem) => Promise<void> | void;
   profile: UserProfile;
   isOnline: boolean;
+  currentUser?: FirebaseUser | null;
+  visitorId?: string;
+  onSignInGoogle?: () => void;
 }
 
 const COMMON_EMOJIS = [
@@ -35,9 +43,13 @@ export const UploadModal: React.FC<UploadModalProps> = ({
   onUploadSuccess,
   profile,
   isOnline,
+  currentUser,
+  visitorId,
+  onSignInGoogle,
 }) => {
   const [selectedType, setSelectedType] = useState<MediaType | null>(null);
   const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
   const [tagsInput, setTagsInput] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [filePreviewUrl, setFilePreviewUrl] = useState<string>('');
@@ -45,6 +57,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
   const [customEmojiInput, setCustomEmojiInput] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [statusText, setStatusText] = useState('');
   const [videoDuration, setVideoDuration] = useState<number | undefined>(undefined);
   const [videoResolution, setVideoResolution] = useState<string | undefined>(undefined);
   const [thumbnailDataUrl, setThumbnailDataUrl] = useState<string | undefined>(undefined);
@@ -57,6 +70,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
   const resetForm = () => {
     setSelectedType(null);
     setTitle('');
+    setDescription('');
     setTagsInput('');
     setFile(null);
     setFilePreviewUrl('');
@@ -64,6 +78,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
     setCustomEmojiInput('');
     setIsProcessing(false);
     setProgress(0);
+    setStatusText('');
     setVideoDuration(undefined);
     setVideoResolution(undefined);
     setThumbnailDataUrl(undefined);
@@ -141,9 +156,44 @@ export const UploadModal: React.FC<UploadModalProps> = ({
 
     setIsProcessing(true);
     setErrorMessage('');
-    setProgress(10);
+    setProgress(5);
+    setStatusText('Preparing media...');
 
     try {
+      const tags = tagsInput.split(',').map((t) => t.trim()).filter(Boolean);
+      if (tags.length === 0) tags.push(selectedType.charAt(0).toUpperCase() + selectedType.slice(1));
+
+      if (selectedType === 'video') {
+        if (!file) throw new Error('Video file is required.');
+        const uploaderName = currentUser?.displayName || profile.name || 'Troll Animator';
+        const uploaderId = currentUser?.uid || visitorId || getVisitorId();
+
+        const newVideoItem = await uploadVideoToGallery(
+          file,
+          {
+            title: title.trim(),
+            description: description.trim(),
+            uploaderName,
+            uploaderId,
+            tags,
+            thumbnailDataUrl,
+            duration: videoDuration,
+            resolution: videoResolution,
+          },
+          (pct, txt) => {
+            setProgress(pct);
+            setStatusText(txt);
+          }
+        );
+
+        setProgress(100);
+        await onUploadSuccess(newVideoItem);
+        setIsProcessing(false);
+        handleClose();
+        return;
+      }
+
+      // Photos & Emojis continue using existing local vault handling (Requirement 9)
       let mediaUrl = filePreviewUrl;
       let format = selectedType.toUpperCase();
       let fileSizeStr = '1.0 MB';
@@ -161,9 +211,8 @@ export const UploadModal: React.FC<UploadModalProps> = ({
         }
       }
 
-      setProgress(45);
-      const tags = tagsInput.split(',').map((t) => t.trim()).filter(Boolean);
-      if (tags.length === 0) tags.push(selectedType.charAt(0).toUpperCase() + selectedType.slice(1));
+      setProgress(60);
+      setStatusText('Indexing into media vault...');
 
       const newItem: MediaItem = {
         id: `${selectedType}-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
@@ -182,7 +231,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
         blobData: file || undefined,
       };
 
-      setProgress(70);
+      setProgress(85);
       await onUploadSuccess(newItem);
       setProgress(100);
       setIsProcessing(false);
@@ -190,7 +239,9 @@ export const UploadModal: React.FC<UploadModalProps> = ({
     } catch (error) {
       console.error('Media upload failed:', error);
       setIsProcessing(false);
-      setErrorMessage(error instanceof Error ? error.message : 'Upload failed. Please try a smaller MP4 file and try again.');
+      setProgress(0);
+      setStatusText('');
+      setErrorMessage(error instanceof Error ? error.message : 'Upload failed. Please check your video file and try again.');
     }
   };
 
@@ -350,6 +401,59 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                 </div>
               </div>
 
+              {/* Video Description (Requirement 2: Title, Description, Uploader Name, Upload Date, Storage URL) */}
+              {selectedType === 'video' && (
+                <div>
+                  <label className="block text-xs font-semibold text-zinc-200 mb-1.5 flex items-center justify-between">
+                    <span className="flex items-center gap-1.5">
+                      <AlignLeft className="w-3.5 h-3.5 text-zinc-400" />
+                      <span>Video Description</span>
+                    </span>
+                    <span className="text-[11px] text-zinc-400">Stored in Cloud Firestore</span>
+                  </label>
+                  <textarea
+                    rows={2}
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    placeholder="Describe your troll animation or funny joke..."
+                    className="w-full px-3.5 py-2.5 bg-zinc-950 border border-zinc-800 rounded-xl text-white text-xs sm:text-sm focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition resize-none"
+                  />
+                </div>
+              )}
+
+              {/* Publisher & Ownership Banner (Requirement 4 & 10) */}
+              {selectedType === 'video' && (
+                <div className="p-3 rounded-xl bg-[#17130f] border border-[#3e3226] flex flex-wrap items-center justify-between gap-2.5 text-xs">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <div className="w-7 h-7 rounded-lg overflow-hidden bg-zinc-900 border border-amber-500/40 flex items-center justify-center shrink-0">
+                      {currentUser?.photoURL ? (
+                        <img src={currentUser.photoURL} alt="User" className="w-full h-full object-cover" />
+                      ) : (
+                        <User className="w-3.5 h-3.5 text-amber-400" />
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-[11px] font-semibold text-[#fbf7ee] truncate">
+                        Publishing as: <span className="text-amber-400 font-bold">{currentUser?.displayName || profile.name}</span>
+                      </p>
+                      <p className="text-[10px] text-[#9c8e7e]">
+                        {currentUser ? 'Protected: Only your account can delete this video' : 'Publishing to shared public gallery'}
+                      </p>
+                    </div>
+                  </div>
+                  {!currentUser && onSignInGoogle && (
+                    <button
+                      type="button"
+                      onClick={onSignInGoogle}
+                      className="px-2.5 py-1 text-[11px] font-semibold rounded-lg bg-[#27201a] hover:bg-[#322921] text-amber-300 border border-amber-800/60 transition flex items-center gap-1.5 shrink-0"
+                    >
+                      <Sparkles className="w-3 h-3 text-amber-400" />
+                      <span>Sign in with Google</span>
+                    </button>
+                  )}
+                </div>
+              )}
+
               {/* File Picker / Drag Zone for Photo or Video */}
               {selectedType !== 'emoji' && (
                 <div>
@@ -495,8 +599,8 @@ export const UploadModal: React.FC<UploadModalProps> = ({
               {isProcessing && (
                 <div className="space-y-1.5 pt-1">
                   <div className="flex items-center justify-between text-xs text-[#a89b8c]">
-                    <span>Uploading and indexing media into vault...</span>
-                    <span>{progress}%</span>
+                    <span className="truncate max-w-[80%]">{statusText || 'Uploading and indexing media into vault...'}</span>
+                    <span className="font-mono text-amber-400 font-semibold">{progress}%</span>
                   </div>
                   <div className="w-full h-2 rounded-full bg-[#27211b] overflow-hidden">
                     <div

@@ -73,6 +73,11 @@ export interface MediaItem {
   thumbnailBlob?: Blob;
   comments?: MediaComment[];
   isEdited?: boolean;
+  description?: string;
+  uploaderName?: string;
+  uploaderId?: string;
+  storageUrl?: string;
+  storagePath?: string;
   savedEdits?: {
     filterSettings?: MediaFilterSettings;
     trim?: VideoTrim;
