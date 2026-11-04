@@ -46,7 +46,7 @@ import {
   subscribeToVideoGallery, 
   deleteVideoFromGallery 
 } from './services/videoGallery';
-import { subscribeToPhotoGallery } from './services/photoGallery';
+import { subscribeToPhotoGallery, uploadPhotoToGallery } from './services/photoGallery';
 import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
 
 export default function App() {
@@ -165,15 +165,36 @@ export default function App() {
     showToast('Profile updated successfully!');
   };
 
-  // Videos and photos/GIFs with storage paths are already shared through Supabase.
+  // Videos, photos and generated GIF/image files are shared through Supabase.
   const handleUploadSuccess = async (newItem: MediaItem) => {
     if (newItem.type === 'video' || (newItem.type === 'photo' && newItem.storagePath)) {
       showToast(`Uploaded "${newItem.title}" to shared online gallery!`);
-    } else {
-      await saveMediaItem(newItem);
-      setLocalMedia((prev) => [newItem, ...prev]);
-      showToast(`Added "${newItem.title}" to your vault!`);
+      return;
     }
+
+    if (newItem.blobData && (newItem.type === 'photo' || newItem.format?.toUpperCase() === 'GIF')) {
+      try {
+        const extension = newItem.format?.toLowerCase() === 'gif' ? 'gif' : 'jpg';
+        const mimeType = extension === 'gif' ? 'image/gif' : 'image/jpeg';
+        const imageFile = new File([newItem.blobData], `${newItem.title.replace(/[^a-z0-9-_]+/gi, '-')}.${extension}`, { type: mimeType });
+        const sharedItem = await uploadPhotoToGallery(imageFile, {
+          title: newItem.title,
+          uploaderName: newItem.author || profile.name,
+          uploaderId: currentUser?.uid || visitorId || getVisitorId(),
+          tags: newItem.tags || [],
+        });
+        showToast(`Shared "${sharedItem.title}" with everyone!`);
+        return;
+      } catch (error) {
+        console.error('Could not share generated image/GIF:', error);
+        showToast(error instanceof Error ? error.message : 'Could not share generated image/GIF.');
+        return;
+      }
+    }
+
+    await saveMediaItem(newItem);
+    setLocalMedia((prev) => [newItem, ...prev]);
+    showToast(`Added "${newItem.title}" to your vault!`);
   };
 
   // Delete handler with ownership enforcement (Requirement 10)
