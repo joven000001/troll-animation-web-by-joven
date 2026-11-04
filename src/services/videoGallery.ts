@@ -136,7 +136,7 @@ export async function uploadVideoToGallery(
   const { data, error: insertError } = await supabase
     .from('videos')
     .insert(payload)
-    .select('id,title,description,uploader_name,uploader_id,storage_path,storage_url,video_parts,upload_date')
+    .select('id,title,description,uploader_name,uploader_id,storage_path,storage_url,video_parts,duration,upload_date')
     .single();
 
   if (insertError) {
