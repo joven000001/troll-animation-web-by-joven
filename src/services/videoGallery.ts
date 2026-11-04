@@ -1,7 +1,9 @@
 import { supabase } from './supabase';
 import { MediaItem } from '../types/media';
 
-export interface VideoPart { url: string; storagePath: string; duration: number; size: number; }\n\nexport interface VideoUploadMetadata {
+export interface VideoPart { url: string; storagePath: string; duration: number; size: number; }
+
+export interface VideoUploadMetadata {
   title: string;
   description?: string;
   uploaderName: string;
@@ -27,7 +29,8 @@ function mapVideo(row: any): MediaItem {
     type: 'video',
     url: row.storage_url || '',
     storageUrl: row.storage_url || '',
-    storagePath: path,\n    videoParts: Array.isArray(row.video_parts) ? row.video_parts : [],
+    storagePath: path,
+    videoParts: Array.isArray(row.video_parts) ? row.video_parts : [],
     uploaderName: row.uploader_name || 'Anonymous',
     uploaderId: row.uploader_id || '',
     author: row.uploader_name || 'Anonymous',
@@ -124,13 +127,14 @@ export async function uploadVideoToGallery(
     uploader_id: (metadata.uploaderId || '').slice(0, 128),
     storage_path: storagePath,
     storage_url: storageUrl,
+    video_parts: [],
     upload_date: new Date().toISOString(),
   };
 
   const { data, error: insertError } = await supabase
     .from('videos')
     .insert(payload)
-    .select('id,title,description,uploader_name,uploader_id,storage_path,storage_url,upload_date')
+    .select('id,title,description,uploader_name,uploader_id,storage_path,storage_url,video_parts,upload_date')
     .single();
 
   if (insertError) {
