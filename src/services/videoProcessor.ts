@@ -12,7 +12,8 @@ async function getFFmpeg(onProgress?: (percent: number, label: string) => void):
       ffmpeg.on('progress', ({ progress }) => {
         onProgress?.(Math.max(0, Math.min(100, Math.round(progress * 100))), 'Converting video in your browser...');
       });
-      const base = `https://unpkg.com/@ffmpeg/core@${CORE_VERSION}/dist/umd`;
+      // Vite needs the ESM core build; the UMD build can fail with 'failed to import ffmpeg-core.js'.
+      const base = `https://cdn.jsdelivr.net/npm/@ffmpeg/core@${CORE_VERSION}/dist/esm`;
       await ffmpeg.load({
         coreURL: await toBlobURL(`${base}/ffmpeg-core.js`, 'text/javascript'),
         wasmURL: await toBlobURL(`${base}/ffmpeg-core.wasm`, 'application/wasm'),
