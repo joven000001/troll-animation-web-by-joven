@@ -165,6 +165,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
 
       if (selectedType === 'video') {
         if (!file) throw new Error('Video file is required.');
+        if (file.size > 50 * 1024 * 1024) throw new Error('This video is larger than the 50 MB limit on the Supabase Free plan.');
         const uploaderName = currentUser?.displayName || profile.name || 'Troll Animator';
         const uploaderId = currentUser?.uid || visitorId || getVisitorId();
 
@@ -409,7 +410,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                       <AlignLeft className="w-3.5 h-3.5 text-zinc-400" />
                       <span>Video Description</span>
                     </span>
-                    <span className="text-[11px] text-zinc-400">Stored in Cloud Firestore</span>
+                    <span className="text-[11px] text-zinc-400">Stored in Supabase</span>
                   </label>
                   <textarea
                     rows={2}
@@ -437,7 +438,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                         Publishing as: <span className="text-amber-400 font-bold">{currentUser?.displayName || profile.name}</span>
                       </p>
                       <p className="text-[10px] text-[#9c8e7e]">
-                        {currentUser ? 'Protected: Only your account can delete this video' : 'Publishing to shared public gallery'}
+                        Anyone can upload without signing in · Public gallery
                       </p>
                     </div>
                   </div>
@@ -513,7 +514,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                         </p>
                         <p className="text-xs text-zinc-400">
                           {selectedType === 'video'
-                            ? 'Supports MP4, WebM, MOV, MKV, AVI and all standard video formats'
+                            ? 'Choose a video file · Maximum 50 MB on the free plan'
                             : 'Supports PNG, JPG, WebP, GIF, SVG, BMP up to high-res 4K'}
                         </p>
                       </div>
