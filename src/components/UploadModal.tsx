@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { MediaItem, MediaType, UserProfile } from '../types/media';
 import { uploadVideoToGallery } from '../services/videoGallery';
+import { uploadPhotoToGallery } from '../services/photoGallery';
 import { getVisitorId } from '../services/firebase';
 import { User as FirebaseUser } from 'firebase/auth';
 
@@ -194,7 +195,27 @@ export const UploadModal: React.FC<UploadModalProps> = ({
         return;
       }
 
-      // Photos & Emojis continue using existing local vault handling (Requirement 9)
+      if (selectedType === 'photo') {
+        if (!file) throw new Error('Please choose a photo or GIF file.');
+        if (file.size > 50 * 1024 * 1024) throw new Error('This image or GIF is larger than the 50 MB limit on the Supabase Free plan.');
+        const uploaderName = currentUser?.displayName || profile.name || 'Troll Animator';
+        const uploaderId = currentUser?.uid || visitorId || getVisitorId();
+        const sharedPhoto = await uploadPhotoToGallery(
+          file,
+          { title: title.trim(), uploaderName, uploaderId, tags },
+          (pct, txt) => {
+            setProgress(pct);
+            setStatusText(txt);
+          }
+        );
+        setProgress(100);
+        await onUploadSuccess(sharedPhoto);
+        setIsProcessing(false);
+        handleClose();
+        return;
+      }
+
+      // Emojis continue using the existing local vault handling.
       let mediaUrl = filePreviewUrl;
       let format = selectedType.toUpperCase();
       let fileSizeStr = '1.0 MB';
@@ -311,7 +332,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                 </div>
                 <div>
                   <span className="text-xs sm:text-sm font-semibold text-[#fbf7ee] block font-serif">Photo</span>
-                  <span className="text-[10px] text-[#9c8e7e] hidden sm:block">PNG, JPG, WebP</span>
+                  <span className="text-[10px] text-[#9c8e7e] hidden sm:block">PNG, JPG, WebP, GIF</span>
                 </div>
               </button>
 
