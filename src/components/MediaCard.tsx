@@ -41,6 +41,7 @@ export const MediaCard: React.FC<MediaCardProps> = ({
   const [downloading, setDownloading] = useState(false);
   const [downloadSuccess, setDownloadSuccess] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const canDelete = !item.storagePath || (!!currentUserId && item.uploaderId === currentUserId);
 
   const handleMouseEnter = () => {
     setIsHovered(true);
@@ -276,7 +277,7 @@ export const MediaCard: React.FC<MediaCardProps> = ({
             </button>
 
             {/* Deletion protection: Only creator can delete their video (Requirement 10) */}
-            {(item.type !== 'video' || (currentUserId && item.uploaderId === currentUserId) || (visitorId && item.uploaderId === visitorId)) ? (
+            {canDelete ? (
               <button
                 onClick={() => onDelete(item.id)}
                 type="button"
@@ -288,7 +289,7 @@ export const MediaCard: React.FC<MediaCardProps> = ({
             ) : (
               <span
                 className="p-1.5 text-[#54483d] cursor-not-allowed"
-                title="Protected: Only the original creator can delete this shared video"
+                title="Protected: Only the original uploader can delete this shared upload"
               >
                 <Lock className="w-3.5 h-3.5 opacity-50" />
               </span>
