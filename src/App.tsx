@@ -46,7 +46,8 @@ import {
   subscribeToVideoGallery, 
   deleteVideoFromGallery 
 } from './services/videoGallery';
-import { subscribeToPhotoGallery, uploadPhotoToGallery } from './services/photoGallery';
+import { subscribeToPhotoGallery, uploadPhotoToGallery, deletePhotoFromGallery } from './services/photoGallery';
+import { ensureSupabaseIdentity } from './services/supabaseIdentity';
 import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
 
 export default function App() {
@@ -411,7 +412,7 @@ export default function App() {
               onEdit={(item) => setEditingItem(item)}
               onDelete={handleDeleteMedia}
               onOpenUpload={handleOpenUploadWithType}
-              currentUserId={currentUser?.uid}
+              currentUserId={supabaseIdentityId}
               visitorId={visitorId}
             />
 
