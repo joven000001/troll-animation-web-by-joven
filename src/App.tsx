@@ -520,6 +520,19 @@ export default function App() {
           </div>
         </section>
 
+        {/* Project Credits */}
+        <section
+          aria-label="Project credits"
+          className="mx-auto max-w-4xl rounded-2xl border border-amber-600/40 bg-gradient-to-r from-[#211a14] via-[#2a2018] to-[#211a14] px-5 py-5 sm:px-7 text-center shadow-lg shadow-black/20"
+        >
+          <p className="text-xs uppercase tracking-[0.2em] text-[#a89b8c]">The people behind the idea</p>
+          <p className="mt-2 text-sm sm:text-base text-[#ede8df]">
+            Idea by <span className="font-extrabold text-amber-300">Adhith</span>
+            <span className="mx-2 text-amber-500">✦</span>
+            Built by <span className="font-extrabold text-amber-300">Joven</span>
+          </p>
+        </section>
+
       </main>
 
       {/* Traditional Studio Footer */}
