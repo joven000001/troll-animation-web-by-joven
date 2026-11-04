@@ -112,6 +112,12 @@ export const MediaViewModal: React.FC<MediaViewModalProps> = ({
   };
 
   useEffect(() => {
+    if (item?.videoParts?.length && isPlaying && videoRef.current) {
+      videoRef.current.play().catch(() => setIsPlaying(false));
+    }
+  }, [activeVideoPart]);
+
+  useEffect(() => {
     if (item?.type === 'video' && videoRef.current) {
       videoRef.current.currentTime = 0;
       setActiveVideoPart(0);
