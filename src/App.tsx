@@ -46,6 +46,7 @@ import {
   subscribeToVideoGallery, 
   deleteVideoFromGallery 
 } from './services/videoGallery';
+import { subscribeToPhotoGallery } from './services/photoGallery';
 import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
 
 export default function App() {
@@ -55,8 +56,9 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);
   const [visitorId, setVisitorId] = useState<string>('');
 
-  // Media state: online shared videos + local photos/emojis
+  // Media state: online shared videos/photos + local emojis and edited copies
   const [onlineVideos, setOnlineVideos] = useState<MediaItem[]>([]);
+  const [onlinePhotos, setOnlinePhotos] = useState<MediaItem[]>([]);
   const [localMedia, setLocalMedia] = useState<MediaItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [profile, setProfile] = useState<UserProfile>(DEFAULT_PROFILE);
@@ -131,14 +133,23 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
-  // 3. Load local photos, emojis, and artist profile from storage
+  // 3. Subscribe to shared photos and animated GIFs
+  useEffect(() => {
+    const unsubscribe = subscribeToPhotoGallery(
+      (photos) => setOnlinePhotos(photos),
+      (error) => console.warn('Shared photo gallery note:', error)
+    );
+    return () => unsubscribe();
+  }, []);
+
+  // 4. Load local emojis and artist profile from storage
   useEffect(() => {
     async function loadLocalData() {
       try {
         const stored = await getStoredMedia();
         // Requirement 11: Do not use IndexedDB as main video storage
         // Only load photos and emojis into local vault
-        const nonVideos = stored.filter((i) => i.type !== 'video');
+        const nonVideos = stored.filter((i) => i.type === 'emoji' || (i.type === 'photo' && !i.storagePath));
         setLocalMedia(nonVideos);
         setProfile(getStoredProfile());
       } catch (err) {
@@ -154,9 +165,9 @@ export default function App() {
     showToast('Profile updated successfully!');
   };
 
-  // Upload handler (videos go to Firebase online gallery; photos/emojis to local vault)
+  // Videos and photos/GIFs with storage paths are already shared through Supabase.
   const handleUploadSuccess = async (newItem: MediaItem) => {
-    if (newItem.type === 'video') {
+    if (newItem.type === 'video' || (newItem.type === 'photo' && newItem.storagePath)) {
       showToast(`Uploaded "${newItem.title}" to shared online gallery!`);
     } else {
       await saveMediaItem(newItem);
@@ -169,6 +180,11 @@ export default function App() {
   const handleDeleteMedia = async (id: string) => {
     const target = mediaItems.find((item) => item.id === id);
     if (!target) return;
+
+    if (target.type === 'photo' && target.storagePath) {
+      showToast('Shared photos and GIFs cannot be deleted by public visitors.');
+      return;
+    }
 
     if (target.type === 'video') {
       const canDelete =
@@ -223,8 +239,8 @@ export default function App() {
 
   // Combined media items: online shared videos + local photos and emojis
   const mediaItems = useMemo(() => {
-    return [...onlineVideos, ...localMedia];
-  }, [onlineVideos, localMedia]);
+    return [...onlineVideos, ...onlinePhotos, ...localMedia];
+  }, [onlineVideos, onlinePhotos, localMedia]);
 
   // Filter items by search query
   const filteredItems = useMemo(() => {
@@ -295,7 +311,7 @@ export default function App() {
               <span className="text-xl sm:text-2xl filter drop-shadow">😈</span>
             </h1>
             <p className="text-xs sm:text-sm text-[#a89b8c] max-w-xl">
-              Browse sideways shelves of shared online videos, artwork, and custom stickers. Upload your troll animation to share with all visitors across devices.
+              Browse sideways shelves of shared videos, photos, GIFs, artwork, and custom stickers. Upload media to share with all visitors across devices.
             </p>
           </div>
 
@@ -364,13 +380,13 @@ export default function App() {
         {isLoading ? (
           <div className="flex flex-col items-center justify-center py-20 space-y-3">
             <RefreshCw className="w-8 h-8 text-amber-500 animate-spin" />
-            <p className="text-sm text-[#a89b8c] font-serif">Connecting to shared video vault in Supabase...</p>
+            <p className="text-sm text-[#a89b8c] font-serif">Connecting to shared media vault in Supabase...</p>
           </div>
         ) : (
           /* THE THREE SIDEWAYS SCROLLING ROWS: VIDEOS, PHOTOS, EMOJIS */
           <div className="space-y-8 sm:space-y-10 w-full max-w-full overflow-hidden">
             
-            {/* ROW 1: VIDEOS (Real-time Cloud Firestore Shared Public Gallery) */}
+            {/* ROW 1: VIDEOS (Real-time Supabase Shared Public Gallery) */}
             <HorizontalMediaRow
               title="Shared Troll Videos & Animations"
               type="video"
@@ -386,7 +402,7 @@ export default function App() {
 
             {/* ROW 2: PHOTOS (Scrolled Sideways) */}
             <HorizontalMediaRow
-              title="Photos & Creative Artwork"
+              title="Shared Photos, GIFs & Creative Artwork"
               type="photo"
               items={photoItems}
               onView={(item) => setViewingItem(item)}
@@ -429,7 +445,7 @@ export default function App() {
                   </span>
                 </h3>
                 <p className="text-xs sm:text-sm text-[#a89b8c] mt-0.5">
-                  Import animation clips to the shared online gallery, or add high-res photos and emojis. Accessible across all browsers and devices.
+                  Import videos, photos and animated GIFs to the shared online gallery, or add emojis. Accessible across all browsers and devices.
                 </p>
               </div>
             </div>
@@ -482,17 +498,17 @@ export default function App() {
           </h2>
           <p className="mt-3 text-sm leading-7 text-[#b9aa99]">
             Troll Animation by Joven is a creative online studio for collecting and working with funny videos,
-            troll animations, memes, photos and custom stickers. All visitors share the same online video gallery powered by Supabase,
+            troll animations, memes, photos and custom stickers. All visitors share the same online video and photo/GIF galleries powered by Supabase,
             meaning any animation you upload is instantly visible across all devices.
           </p>
           <div className="mt-5 grid gap-3 text-left sm:grid-cols-3">
             <div className="rounded-xl border border-[#383028] bg-[#211b16] p-3">
               <h3 className="text-sm font-semibold text-amber-300">Shared Online Gallery</h3>
-              <p className="mt-1 text-xs leading-5 text-[#a89b8c]">All visitors see the same shared video gallery with real-time updates.</p>
+              <p className="mt-1 text-xs leading-5 text-[#a89b8c]">All visitors see the same shared video, photo and GIF galleries with real-time updates.</p>
             </div>
             <div className="rounded-xl border border-[#383028] bg-[#211b16] p-3">
-              <h3 className="text-sm font-semibold text-amber-300">Protected Video Deletion</h3>
-              <p className="mt-1 text-xs leading-5 text-[#a89b8c]">Only the creator who uploaded a video can delete it. Visitors cannot delete other creators&apos; work.</p>
+              <h3 className="text-sm font-semibold text-amber-300">Public Uploads</h3>
+              <p className="mt-1 text-xs leading-5 text-[#a89b8c]">Anyone can upload videos, photos and GIFs without signing in. Public visitors cannot delete shared uploads.</p>
             </div>
             <div className="rounded-xl border border-[#383028] bg-[#211b16] p-3">
               <h3 className="text-sm font-semibold text-amber-300">Creative Editing Tools</h3>
