@@ -38,6 +38,7 @@ function mapVideo(row: any): MediaItem {
     tags: ['troll', 'video', extension.toLowerCase()],
     format: extension,
     fileSize: 'Shared video',
+    duration: row.duration ? Number(row.duration) : undefined,
   };
 }
 
@@ -51,7 +52,7 @@ export function subscribeToVideoGallery(
   const loadVideos = async () => {
     const { data, error } = await supabase
       .from('videos')
-      .select('id,title,description,uploader_name,uploader_id,storage_path,storage_url,video_parts,upload_date')
+      .select('id,title,description,uploader_name,uploader_id,storage_path,storage_url,video_parts,duration,upload_date')
       .order('upload_date', { ascending: false });
 
     if (error) throw error;
@@ -128,6 +129,7 @@ export async function uploadVideoToGallery(
     storage_path: storagePath,
     storage_url: storageUrl,
     video_parts: [],
+    duration: metadata.duration || null,
     upload_date: new Date().toISOString(),
   };
 
@@ -186,6 +188,7 @@ export async function uploadVideoPartsToGallery(
       storage_path: uploaded[0].storagePath,
       storage_url: uploaded[0].url,
       video_parts: uploaded,
+      duration: metadata.duration || null,
       upload_date: new Date().toISOString(),
     };
     const { data, error } = await supabase.from('videos')
