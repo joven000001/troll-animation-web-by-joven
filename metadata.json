@@ -1,6 +1,8 @@
 {
-  "name": "Troll Animation by Joven",
-  "description": "Explore Troll Animation by Joven — funny trolls, animations, memes, and creative entertainment.",
+  "name": "Fins Fans Association",
+  "description": "Fins Fans Association is a shared online creative community for videos, photos, animated GIFs and creative media.",
   "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
 }
