@@ -65,6 +65,8 @@ export const MediaViewModal: React.FC<MediaViewModalProps> = ({
   );
   const [commentText, setCommentText] = useState('');
   const [includeTimestamp, setIncludeTimestamp] = useState(true);
+  const [activeVideoPart, setActiveVideoPart] = useState(0);
+  const pendingPartTime = useRef<number | null>(null);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -112,6 +114,8 @@ export const MediaViewModal: React.FC<MediaViewModalProps> = ({
   useEffect(() => {
     if (item?.type === 'video' && videoRef.current) {
       videoRef.current.currentTime = 0;
+      setActiveVideoPart(0);
+      setCurrentTime(0);
       setIsPlaying(true);
       videoRef.current.play().catch(() => setIsPlaying(false));
     }
@@ -133,21 +137,44 @@ export const MediaViewModal: React.FC<MediaViewModalProps> = ({
 
   const handleTimeUpdate = () => {
     if (videoRef.current) {
-      setCurrentTime(videoRef.current.currentTime);
+      setCurrentTime((item?.videoParts?.length ? activeVideoPart * 90 : 0) + videoRef.current.currentTime);
     }
   };
 
   const handleLoadedMetadata = () => {
-    if (videoRef.current) {
-      setDuration(videoRef.current.duration);
+    if (!videoRef.current) return;
+    setDuration(item?.videoParts?.length ? (item.duration || item.videoParts.length * 90) : videoRef.current.duration);
+    if (pendingPartTime.current !== null) {
+      videoRef.current.currentTime = pendingPartTime.current;
+      pendingPartTime.current = null;
     }
+  };
+
+  const handleVideoEnded = () => {
+    if (item?.videoParts?.length && activeVideoPart < item.videoParts.length - 1) {
+      setActiveVideoPart((part) => part + 1);
+      return;
+    }
+    if (isLooping && item?.videoParts?.length) {
+      setActiveVideoPart(0);
+      setCurrentTime(0);
+      return;
+    }
+    setIsPlaying(false);
   };
 
   const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
     const time = parseFloat(e.target.value);
     setCurrentTime(time);
     if (videoRef.current) {
-      videoRef.current.currentTime = time;
+      if (item?.videoParts?.length) {
+        const nextPart = Math.min(item.videoParts.length - 1, Math.floor(time / 90));
+        const localTime = Math.max(0, time - nextPart * 90);
+        if (nextPart !== activeVideoPart) {
+          pendingPartTime.current = localTime;
+          setActiveVideoPart(nextPart);
+        } else videoRef.current.currentTime = localTime;
+      } else videoRef.current.currentTime = time;
     }
   };
 
@@ -313,12 +340,12 @@ export const MediaViewModal: React.FC<MediaViewModalProps> = ({
             <div className="relative w-full h-full flex flex-col justify-center items-center group">
               <video
                 ref={videoRef}
-                src={item.url}
+                src={item.videoParts?.length ? item.videoParts[activeVideoPart]?.url : item.url}
                 playsInline
                 loop={isLooping}
                 onTimeUpdate={handleTimeUpdate}
                 onLoadedMetadata={handleLoadedMetadata}
-                onEnded={() => setIsPlaying(false)}
+                onEnded={handleVideoEnded}
                 onClick={togglePlay}
                 className="max-h-[58vh] w-auto max-w-full object-contain cursor-pointer"
               />
