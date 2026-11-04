@@ -71,7 +71,7 @@ export async function convertVideoUnderLimit(
       throw new Error('This video is too long or complex to compress below 44 MB. Choose “Trim & Upload” to split it into parts.');
     }
     onProgress?.(95, 'Preparing converted video...');
-    return new File([data.slice().buffer], `${safeName(source.name)}-compressed.mp4`, { type: 'video/mp4' });
+    return new File([data.slice().buffer as ArrayBuffer], `${safeName(source.name)}-compressed.mp4`, { type: 'video/mp4' });
   } finally {
     await cleanup(ffmpeg, [input, output]);
   }
