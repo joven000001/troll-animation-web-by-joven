@@ -1,11 +1,7 @@
 import { mkdir, copyFile } from 'node:fs/promises';
-import { createRequire } from 'node:module';
-import { dirname, join } from 'node:path';
+import { join } from 'node:path';
 
-const require = createRequire(import.meta.url);
-const packageJsonPath = require.resolve('@ffmpeg/ffmpeg/package.json');
-const packageRoot = dirname(packageJsonPath);
-const sourceDir = join(packageRoot, 'dist', 'esm');
+const sourceDir = join(process.cwd(), 'node_modules', '@ffmpeg', 'ffmpeg', 'dist', 'esm');
 const targetDir = join(process.cwd(), 'public', 'ffmpeg');
 
 await mkdir(targetDir, { recursive: true });
