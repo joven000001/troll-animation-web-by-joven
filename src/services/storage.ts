@@ -65,17 +65,28 @@ export async function getStoredMedia(): Promise<MediaItem[]> {
       const tx = db.transaction(STORE_NAME, 'readwrite');
       const store = tx.objectStore(STORE_NAME);
       const cleanupKey = 'troll_animation_old_videos_cleared_v1';
+      const photoCleanupKey = 'troll_animation_old_photos_cleared_v1';
       let clearOldVideos = false;
+      let clearOldPhotos = false;
       try {
         clearOldVideos = localStorage.getItem(cleanupKey) !== 'done';
+        clearOldPhotos = localStorage.getItem(photoCleanupKey) !== 'done';
       } catch {
         clearOldVideos = false;
+        clearOldPhotos = false;
       }
 
       tx.oncomplete = () => {
         if (clearOldVideos) {
           try {
             localStorage.setItem(cleanupKey, 'done');
+          } catch {
+            // Ignore storage restrictions; cleanup still completed.
+          }
+        }
+        if (clearOldPhotos) {
+          try {
+            localStorage.setItem(photoCleanupKey, 'done');
           } catch {
             // Ignore storage restrictions; cleanup still completed.
           }
@@ -108,16 +119,19 @@ export async function getStoredMedia(): Promise<MediaItem[]> {
           return item;
         });
 
-        // Clear videos that were saved before this one-time cleanup, not future uploads.
-        if (clearOldVideos) {
+        // Clear previously browser-local media once; new shared uploads live in Supabase.
+        if (clearOldVideos || clearOldPhotos) {
           for (const item of restored) {
-            if (item.type === 'video') store.delete(item.id);
+            if ((clearOldVideos && item.type === 'video') || (clearOldPhotos && item.type === 'photo')) {
+              store.delete(item.id);
+            }
           }
         }
 
         const sanitized = restored.filter(
           (i) =>
             !(clearOldVideos && i.type === 'video') &&
+            !(clearOldPhotos && i.type === 'photo') &&
             !i.id.startsWith('vid-') &&
             !i.id.startsWith('emoji-troll-') &&
             !i.id.startsWith('emoji-1') &&
