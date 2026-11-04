@@ -14,9 +14,16 @@ async function getFFmpeg(onProgress?: (percent: number, label: string) => void):
       });
       // Vite needs the ESM core build; the UMD build can fail with 'failed to import ffmpeg-core.js'.
       const base = `https://cdn.jsdelivr.net/npm/@ffmpeg/core@${CORE_VERSION}/dist/esm`;
+      // Serve the FFmpeg wrapper worker as a plain public asset so Vite does not
+      // rewrite its dynamic import() of the CDN-hosted core module.
+      const [coreURL, wasmURL] = await Promise.all([
+        toBlobURL(`${base}/ffmpeg-core.js`, 'text/javascript'),
+        toBlobURL(`${base}/ffmpeg-core.wasm`, 'application/wasm'),
+      ]);
       await ffmpeg.load({
-        coreURL: await toBlobURL(`${base}/ffmpeg-core.js`, 'text/javascript'),
-        wasmURL: await toBlobURL(`${base}/ffmpeg-core.wasm`, 'application/wasm'),
+        coreURL,
+        wasmURL,
+        classWorkerURL: `${window.location.origin}/ffmpeg/worker.js`,
       });
       return ffmpeg;
     })().catch((error) => {
