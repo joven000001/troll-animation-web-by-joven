@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
 import { MediaItem } from '../types/media';
+import { ensureSupabaseIdentity } from './supabaseIdentity';
 
 export interface VideoPart { url: string; storagePath: string; duration: number; size: number; }
 
@@ -95,6 +96,7 @@ export async function uploadVideoToGallery(
   }
   if (!metadata.title.trim()) throw new Error('Please enter a video title.');
 
+  const owner = await ensureSupabaseIdentity();
   const extension = file.name.split('.').pop()?.toLowerCase().replace(/[^a-z0-9]/g, '') || 'video';
   const fileId = typeof crypto !== 'undefined' && 'randomUUID' in crypto
     ? crypto.randomUUID()
@@ -125,7 +127,7 @@ export async function uploadVideoToGallery(
     title: metadata.title.trim().slice(0, 120),
     description: (metadata.description || '').trim().slice(0, 2000),
     uploader_name: (metadata.uploaderName || 'Anonymous').trim().slice(0, 60),
-    uploader_id: (metadata.uploaderId || '').slice(0, 128),
+    uploader_id: owner.id,
     storage_path: storagePath,
     storage_url: storageUrl,
     video_parts: [],
@@ -149,9 +151,20 @@ export async function uploadVideoToGallery(
   return mapVideo(data);
 }
 
-/** Public deletion is intentionally unavailable; the database has no public delete policy. */
-export async function deleteVideoFromGallery(_video: MediaItem, _currentUserId?: string): Promise<void> {
-  throw new Error('Video deletion is currently disabled for public visitors.');
+/** Delete only when the Supabase identity owns the gallery row and all stored parts. */
+export async function deleteVideoFromGallery(video: MediaItem): Promise<void> {
+  const owner = await ensureSupabaseIdentity();
+  if (video.uploaderId !== owner.id) throw new Error('Only the original uploader can delete this video.');
+  const paths = video.videoParts?.length
+    ? video.videoParts.map((part) => part.storagePath)
+    : (video.storagePath ? [video.storagePath] : []);
+  const { data, error } = await supabase.from('videos').delete().eq('id', video.id).select('id').maybeSingle();
+  if (error) throw new Error('Could not delete video: ' + error.message);
+  if (!data) throw new Error('Delete blocked: this account does not own the video.');
+  if (paths.length) {
+    const { error: storageError } = await supabase.storage.from(BUCKET).remove(paths);
+    if (storageError) throw new Error('Video entry deleted, but some stored files could not be removed: ' + storageError.message);
+  }
 }
 
 
@@ -165,6 +178,7 @@ export async function uploadVideoPartsToGallery(
   if (parts.some((part) => part.size > MAX_VIDEO_BYTES)) {
     throw new Error('A trimmed part exceeds the 50 MB upload limit.');
   }
+  const owner = await ensureSupabaseIdentity();
   const uploaded: { url: string; storagePath: string; duration: number; size: number }[] = [];
   try {
     for (let index = 0; index < parts.length; index += 1) {
@@ -184,7 +198,7 @@ export async function uploadVideoPartsToGallery(
       title: metadata.title.trim().slice(0, 120),
       description: (metadata.description || '').trim().slice(0, 2000),
       uploader_name: (metadata.uploaderName || 'Anonymous').trim().slice(0, 60),
-      uploader_id: (metadata.uploaderId || '').slice(0, 128),
+      uploader_id: owner.id,
       storage_path: uploaded[0].storagePath,
       storage_url: uploaded[0].url,
       video_parts: uploaded,
