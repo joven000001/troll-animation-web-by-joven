@@ -364,7 +364,7 @@ export default function App() {
         {isLoading ? (
           <div className="flex flex-col items-center justify-center py-20 space-y-3">
             <RefreshCw className="w-8 h-8 text-amber-500 animate-spin" />
-            <p className="text-sm text-[#a89b8c] font-serif">Connecting to shared video vault in Cloud Firestore...</p>
+            <p className="text-sm text-[#a89b8c] font-serif">Connecting to shared video vault in Supabase...</p>
           </div>
         ) : (
           /* THE THREE SIDEWAYS SCROLLING ROWS: VIDEOS, PHOTOS, EMOJIS */
@@ -482,7 +482,7 @@ export default function App() {
           </h2>
           <p className="mt-3 text-sm leading-7 text-[#b9aa99]">
             Troll Animation by Joven is a creative online studio for collecting and working with funny videos,
-            troll animations, memes, photos and custom stickers. All visitors share the same online video gallery powered by Firebase,
+            troll animations, memes, photos and custom stickers. All visitors share the same online video gallery powered by Supabase,
             meaning any animation you upload is instantly visible across all devices.
           </p>
           <div className="mt-5 grid gap-3 text-left sm:grid-cols-3">
@@ -508,7 +508,7 @@ export default function App() {
         <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2.5">
           <p className="font-serif">Troll Animation — Traditional Cell & Media Studio</p>
           <div className="flex items-center gap-3 text-[#796c5e] text-[11px]">
-            <span>Firebase Online Gallery</span>
+            <span>Supabase Shared Gallery</span>
             <span>·</span>
             <span>Original Media Preserved</span>
           </div>
