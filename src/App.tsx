@@ -55,6 +55,7 @@ export default function App() {
   // Authentication & Visitor Identity state
   const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);
   const [visitorId, setVisitorId] = useState<string>('');
+  const [supabaseIdentityId, setSupabaseIdentityId] = useState<string>('');
 
   // Media state: online shared videos/photos + local emojis and edited copies
   const [onlineVideos, setOnlineVideos] = useState<MediaItem[]>([]);
@@ -109,6 +110,7 @@ export default function App() {
   useEffect(() => {
     testConnection();
     setVisitorId(getVisitorId());
+    ensureSupabaseIdentity().then((user) => setSupabaseIdentityId(user.id)).catch((error) => console.error('Secure uploader identity unavailable:', error));
 
     const unsubAuth = onAuthStateChanged(auth, (user) => {
       setCurrentUser(user);
@@ -180,7 +182,7 @@ export default function App() {
         const sharedItem = await uploadPhotoToGallery(imageFile, {
           title: newItem.title,
           uploaderName: newItem.author || profile.name,
-          uploaderId: currentUser?.uid || visitorId || getVisitorId(),
+          uploaderId: supabaseIdentityId,
           tags: newItem.tags || [],
         });
         showToast(`Shared "${sharedItem.title}" with everyone!`);
@@ -197,45 +199,24 @@ export default function App() {
     showToast(`Added "${newItem.title}" to your vault!`);
   };
 
-  // Delete handler with ownership enforcement (Requirement 10)
+  // Supabase RLS is the final authority for shared-media deletion.
   const handleDeleteMedia = async (id: string) => {
     const target = mediaItems.find((item) => item.id === id);
     if (!target) return;
-
-    if (target.type === 'photo' && target.storagePath) {
-      showToast('Shared photos and GIFs cannot be deleted by public visitors.');
-      return;
-    }
-
-    if (target.type === 'video') {
-      const canDelete =
-        (currentUser && target.uploaderId === currentUser.uid) ||
-        (visitorId && target.uploaderId === visitorId);
-
-      if (!canDelete) {
-        showToast('Protected: Only the original creator who uploaded this video can delete it.');
-        return;
-      }
-
-      if (window.confirm(`Delete "${target.title}" from the shared online gallery?`)) {
-        try {
-          await deleteVideoFromGallery(target, currentUser?.uid);
-          showToast(`Deleted "${target.title}" from online gallery.`);
-          if (viewingItem?.id === id) setViewingItem(null);
-          if (editingItem?.id === id) setEditingItem(null);
-        } catch (err: any) {
-          console.error('Failed to delete video:', err);
-          showToast(err.message || 'Permission denied: Could not delete video.');
-        }
-      }
-    } else {
-      if (window.confirm('Delete this item from your Troll Animation vault?')) {
+    if (!window.confirm(`Delete "${target.title}" from the shared online gallery?`)) return;
+    try {
+      if (target.type === 'video') await deleteVideoFromGallery(target);
+      else if (target.type === 'photo' && target.storagePath) await deletePhotoFromGallery(target);
+      else {
         await deleteMediaItem(id);
         setLocalMedia((prev) => prev.filter((item) => item.id !== id));
-        if (viewingItem?.id === id) setViewingItem(null);
-        if (editingItem?.id === id) setEditingItem(null);
-        showToast('Item deleted.');
       }
+      showToast(`Deleted "${target.title}".`);
+      if (viewingItem?.id === id) setViewingItem(null);
+      if (editingItem?.id === id) setEditingItem(null);
+    } catch (err: any) {
+      console.error('Failed to delete media:', err);
+      showToast(err.message || 'Only the original uploader can delete this item.');
     }
   };
 
@@ -417,7 +398,7 @@ export default function App() {
               onDelete={handleDeleteMedia}
               onOpenUpload={handleOpenUploadWithType}
               onOpenMemeGif={(item) => setMemeGifItem(item)}
-              currentUserId={currentUser?.uid}
+              currentUserId={supabaseIdentityId}
               visitorId={visitorId}
             />
 
