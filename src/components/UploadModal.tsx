@@ -291,7 +291,16 @@ export const UploadModal: React.FC<UploadModalProps> = ({
       setIsProcessing(false);
       setProgress(0);
       setStatusText('');
-      setErrorMessage(error instanceof Error ? error.message : 'Upload failed. Please check your video file and try again.');
+      const details = error instanceof Error
+        ? error.message
+        : typeof error === 'string'
+          ? error
+          : error && typeof error === 'object' && 'message' in error
+            ? String((error as { message?: unknown }).message || JSON.stringify(error))
+            : String(error);
+      setErrorMessage(details && details !== '[object Object]'
+        ? details
+        : 'The browser could not process this video. Try a smaller MP4 file or a shorter video.');
     }
   };
 
@@ -563,7 +572,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                         </p>
                         <p className="text-xs text-zinc-400">
                           {selectedType === 'video'
-                            ? 'Choose a video file · Maximum 50 MB on the free plan'
+                            ? 'Choose a video file · Videos over 45 MB will be converted or split'
                             : 'Supports PNG, JPG, WebP, GIF, SVG, BMP up to high-res 4K'}
                         </p>
                       </div>
@@ -574,7 +583,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
 
               {selectedType === 'video' && file && file.size > 45 * 1024 * 1024 && (
                 <div className="p-3 rounded-xl bg-amber-950/40 border border-amber-700/50 space-y-2">
-                  <p className="text-xs font-semibold text-amber-200">This video is over the 50 MB upload size. Choose how to prepare it:</p>
+                  <p className="text-xs font-semibold text-amber-200">This video is over the 45 MB safe upload size. Choose how to prepare it:</p>
                   <div className="grid grid-cols-2 gap-2">
                     <button type="button" disabled={isProcessing} onClick={() => setVideoUploadMode('convert')}
                       className={`p-3 rounded-lg border text-left text-xs ${videoUploadMode === 'convert' ? 'border-amber-400 bg-amber-900/50 text-white' : 'border-zinc-700 bg-zinc-900 text-zinc-300'}`}>
