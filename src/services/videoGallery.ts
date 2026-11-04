@@ -193,7 +193,7 @@ export async function uploadVideoPartsToGallery(
     };
     const { data, error } = await supabase.from('videos')
       .insert(payload)
-      .select('id,title,description,uploader_name,uploader_id,storage_path,storage_url,video_parts,upload_date')
+      .select('id,title,description,uploader_name,uploader_id,storage_path,storage_url,video_parts,duration,upload_date')
       .single();
     if (error) throw new Error(`Could not publish combined video: ${error.message}`);
     onProgress?.(100, 'All parts uploaded! Video is ready.');
