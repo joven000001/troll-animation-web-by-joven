@@ -78,6 +78,7 @@ export interface MediaItem {
   uploaderId?: string;
   storageUrl?: string;
   storagePath?: string;
+  videoParts?: { url: string; storagePath: string; duration: number; size: number }[];
   savedEdits?: {
     filterSettings?: MediaFilterSettings;
     trim?: VideoTrim;
