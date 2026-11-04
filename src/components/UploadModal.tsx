@@ -15,7 +15,8 @@ import {
   AlignLeft
 } from 'lucide-react';
 import { MediaItem, MediaType, UserProfile } from '../types/media';
-import { uploadVideoToGallery } from '../services/videoGallery';
+import { uploadVideoToGallery, uploadVideoPartsToGallery } from '../services/videoGallery';
+import { convertVideoUnderLimit, trimVideoIntoParts } from '../services/videoProcessor';
 import { uploadPhotoToGallery } from '../services/photoGallery';
 import { getVisitorId } from '../services/firebase';
 import { User as FirebaseUser } from 'firebase/auth';
@@ -63,6 +64,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
   const [videoResolution, setVideoResolution] = useState<string | undefined>(undefined);
   const [thumbnailDataUrl, setThumbnailDataUrl] = useState<string | undefined>(undefined);
   const [errorMessage, setErrorMessage] = useState('');
+  const [videoUploadMode, setVideoUploadMode] = useState<'convert' | 'trim'>('convert');
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -84,6 +86,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
     setVideoResolution(undefined);
     setThumbnailDataUrl(undefined);
     setErrorMessage('');
+    setVideoUploadMode('convert');
   };
 
   const handleClose = () => {
@@ -94,6 +97,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
   const handleFileSelect = (selectedFile: File) => {
     setFile(selectedFile);
     setErrorMessage('');
+    if (selectedFile.size > 45 * 1024 * 1024) setVideoUploadMode('convert');
     
     // Auto-fill title if empty
     if (!title) {
@@ -166,27 +170,51 @@ export const UploadModal: React.FC<UploadModalProps> = ({
 
       if (selectedType === 'video') {
         if (!file) throw new Error('Video file is required.');
-        if (file.size > 50 * 1024 * 1024) throw new Error('This video is larger than the 50 MB limit on the Supabase Free plan.');
         const uploaderName = currentUser?.displayName || profile.name || 'Troll Animator';
         const uploaderId = currentUser?.uid || visitorId || getVisitorId();
+        const metadata = {
+          title: title.trim(),
+          description: description.trim(),
+          uploaderName,
+          uploaderId,
+          tags,
+          thumbnailDataUrl,
+          duration: videoDuration,
+          resolution: videoResolution,
+        };
+        let newVideoItem: MediaItem;
 
-        const newVideoItem = await uploadVideoToGallery(
-          file,
-          {
-            title: title.trim(),
-            description: description.trim(),
-            uploaderName,
-            uploaderId,
-            tags,
-            thumbnailDataUrl,
-            duration: videoDuration,
-            resolution: videoResolution,
-          },
-          (pct, txt) => {
-            setProgress(pct);
-            setStatusText(txt);
+        if (file.size <= 45 * 1024 * 1024) {
+          newVideoItem = await uploadVideoToGallery(file, metadata, (pct, txt) => {
+            setProgress(pct); setStatusText(txt);
+          });
+        } else if (videoUploadMode === 'convert') {
+          try {
+            const compressed = await convertVideoUnderLimit(file, (pct, txt) => {
+              setProgress(Math.round(pct * 0.55)); setStatusText(txt);
+            });
+            newVideoItem = await uploadVideoToGallery(compressed, metadata, (pct, txt) => {
+              setProgress(55 + Math.round(pct * 0.45)); setStatusText(txt);
+            });
+          } catch (conversionError) {
+            const message = conversionError instanceof Error ? conversionError.message : '';
+            if (!message.includes('Trim & Upload')) throw conversionError;
+            setStatusText('Compression was not enough. Automatically switching to Trim & Upload...');
+            const parts = await trimVideoIntoParts(file, (pct, txt) => {
+              setProgress(Math.round(pct * 0.45)); setStatusText(txt);
+            });
+            newVideoItem = await uploadVideoPartsToGallery(parts, metadata, (pct, txt) => {
+              setProgress(55 + Math.round(pct * 0.45)); setStatusText(txt);
+            });
           }
-        );
+        } else {
+          const parts = await trimVideoIntoParts(file, (pct, txt) => {
+            setProgress(Math.round(pct * 0.55)); setStatusText(txt);
+          });
+          newVideoItem = await uploadVideoPartsToGallery(parts, metadata, (pct, txt) => {
+            setProgress(55 + Math.round(pct * 0.45)); setStatusText(txt);
+          });
+        }
 
         setProgress(100);
         await onUploadSuccess(newVideoItem);
@@ -541,6 +569,25 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                       </div>
                     )}
                   </div>
+                </div>
+              )}
+
+              {selectedType === 'video' && file && file.size > 45 * 1024 * 1024 && (
+                <div className="p-3 rounded-xl bg-amber-950/40 border border-amber-700/50 space-y-2">
+                  <p className="text-xs font-semibold text-amber-200">This video is over the 50 MB upload size. Choose how to prepare it:</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button type="button" disabled={isProcessing} onClick={() => setVideoUploadMode('convert')}
+                      className={`p-3 rounded-lg border text-left text-xs ${videoUploadMode === 'convert' ? 'border-amber-400 bg-amber-900/50 text-white' : 'border-zinc-700 bg-zinc-900 text-zinc-300'}`}>
+                      <strong className="block mb-1">Convert & Upload</strong>
+                      Compress to one smaller video
+                    </button>
+                    <button type="button" disabled={isProcessing} onClick={() => setVideoUploadMode('trim')}
+                      className={`p-3 rounded-lg border text-left text-xs ${videoUploadMode === 'trim' ? 'border-amber-400 bg-amber-900/50 text-white' : 'border-zinc-700 bg-zinc-900 text-zinc-300'}`}>
+                      <strong className="block mb-1">Trim & Upload</strong>
+                      Split into parts, upload one by one
+                    </button>
+                  </div>
+                  <p className="text-[10px] text-zinc-400">If compression cannot reach the safe size, the converter will automatically split the video instead.</p>
                 </div>
               )}
 
