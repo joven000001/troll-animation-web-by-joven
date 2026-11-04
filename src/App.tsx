@@ -310,7 +310,7 @@ export default function App() {
               </span>
             </div>
             <h1 className="text-xl sm:text-3xl md:text-4xl font-bold text-[#fbf7ee] font-serif tracking-tight flex items-center justify-center sm:justify-start gap-2">
-              <span>Troll Animation Studio</span>
+              <span>Fins Fans Association</span>
               <span className="text-xl sm:text-2xl filter drop-shadow">😈</span>
             </h1>
             <p className="text-xs sm:text-sm text-[#a89b8c] max-w-xl">
@@ -497,10 +497,10 @@ export default function App() {
           className="mx-auto max-w-4xl rounded-2xl border border-[#44382c] bg-[#1a1613]/90 px-5 py-6 sm:px-7 sm:py-8 text-center"
         >
           <h2 id="about-troll-animation" className="text-lg sm:text-xl font-bold font-serif text-[#fbf7ee]">
-            Welcome to Troll Animation by Joven
+            Welcome to Fins Fans Association
           </h2>
           <p className="mt-3 text-sm leading-7 text-[#b9aa99]">
-            Troll Animation by Joven is a creative online studio for collecting and working with funny videos,
+            Fins Fans Association is a shared online creative community for collecting and working with videos,
             troll animations, memes, photos and custom stickers. All visitors share the same online video and photo/GIF galleries powered by Supabase,
             meaning any animation you upload is instantly visible across all devices.
           </p>
@@ -525,7 +525,7 @@ export default function App() {
       {/* Traditional Studio Footer */}
       <footer className="mt-auto border-t border-[#30261e] bg-[#16120f]/95 py-5 sm:py-6 text-center text-xs text-[#8e8071]">
         <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2.5">
-          <p className="font-serif">Troll Animation — Traditional Cell & Media Studio</p>
+          <p className="font-serif">Fins Fans Association — Shared Creative Media Studio</p>
           <div className="flex items-center gap-3 text-[#796c5e] text-[11px]">
             <span>Supabase Shared Gallery</span>
             <span>·</span>
