@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
 import { MediaItem } from '../types/media';
+import { ensureSupabaseIdentity } from './supabaseIdentity';
 
 export interface PhotoUploadMetadata {
   title: string;
@@ -90,6 +91,7 @@ export async function uploadPhotoToGallery(
   if (!metadata.title.trim()) throw new Error('Please enter an image title.');
   if (!file.type.startsWith('image/')) throw new Error('Please choose an image or GIF file.');
 
+  const owner = await ensureSupabaseIdentity();
   const extension = file.name.split('.').pop()?.toLowerCase().replace(/[^a-z0-9]/g, '') || 'image';
   const fileId = typeof crypto !== 'undefined' && 'randomUUID' in crypto
     ? crypto.randomUUID()
@@ -117,7 +119,7 @@ export async function uploadPhotoToGallery(
   const payload = {
     title: metadata.title.trim().slice(0, 120),
     uploader_name: (metadata.uploaderName || 'Anonymous').trim().slice(0, 60),
-    uploader_id: (metadata.uploaderId || '').slice(0, 128),
+    uploader_id: owner.id,
     storage_path: storagePath,
     storage_url: storageUrl,
     tags: (metadata.tags || []).slice(0, 30).map((tag) => tag.slice(0, 40)),
@@ -137,4 +139,17 @@ export async function uploadPhotoToGallery(
 
   onProgress?.(100, 'Image shared with everyone!');
   return mapPhoto(data);
+}
+
+/** Delete a shared photo/GIF only when the current Supabase identity owns it. */
+export async function deletePhotoFromGallery(photo: MediaItem): Promise<void> {
+  const owner = await ensureSupabaseIdentity();
+  if (photo.uploaderId !== owner.id) throw new Error('Only the original uploader can delete this photo or GIF.');
+  const { data, error } = await supabase.from('photos').delete().eq('id', photo.id).select('id').maybeSingle();
+  if (error) throw new Error('Could not delete photo/GIF: ' + error.message);
+  if (!data) throw new Error('Delete blocked: this account does not own this photo/GIF.');
+  if (photo.storagePath) {
+    const { error: storageError } = await supabase.storage.from(BUCKET).remove([photo.storagePath]);
+    if (storageError) throw new Error('Photo entry deleted, but its stored file could not be removed: ' + storageError.message);
+  }
 }
