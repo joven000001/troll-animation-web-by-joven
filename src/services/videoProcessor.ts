@@ -64,14 +64,15 @@ export async function convertVideoUnderLimit(
       video.onerror = () => reject(new Error('Could not read the video duration.'));
       video.src = objectUrl;
     }).finally(() => URL.revokeObjectURL(objectUrl));
-    const targetBitsPerSecond = Math.max(180_000, Math.min(1_800_000, Math.floor((44 * 1024 * 1024 * 8) / Math.max(duration, 1) - 96_000)));
+    // Lower resolution and bitrate reduce WASM CPU work and make browser conversion much faster.
+    const targetBitsPerSecond = Math.max(120_000, Math.min(1_000_000, Math.floor((44 * 1024 * 1024 * 8) / Math.max(duration, 1) - 64_000)));
     const videoK = Math.max(180, Math.floor(targetBitsPerSecond / 1000));
     onProgress?.(5, 'Compressing video to fit under 50 MB...');
     await ffmpeg.exec([
-      '-i', input, '-vf', 'scale=-2:720:force_original_aspect_ratio=decrease',
-      '-c:v', 'libx264', '-preset', 'ultrafast', '-b:v', `${videoK}k`,
+      '-i', input, '-vf', 'scale=-2:480:force_original_aspect_ratio=decrease',
+      '-c:v', 'libx264', '-preset', 'ultrafast', '-threads', '1', '-b:v', `${videoK}k`,
       '-maxrate', `${videoK}k`, '-bufsize', `${videoK * 2}k`,
-      '-c:a', 'aac', '-b:a', '96k', '-movflags', '+faststart', '-y', output,
+      '-c:a', 'aac', '-b:a', '64k', '-movflags', '+faststart', '-y', output,
     ]);
     const data = await ffmpeg.readFile(output);
     if (!(data instanceof Uint8Array)) throw new Error('Video conversion returned an invalid file.');
@@ -100,10 +101,10 @@ export async function trimVideoIntoParts(
     // Conservative bitrate and 90-second segments keep each object comfortably below 50 MiB.
     onProgress?.(5, 'Splitting video into upload-sized parts...');
     await ffmpeg.exec([
-      '-i', input, '-vf', 'scale=-2:720:force_original_aspect_ratio=decrease',
-      '-c:v', 'libx264', '-preset', 'ultrafast', '-b:v', '2200k',
-      '-maxrate', '2200k', '-bufsize', '4400k', '-force_key_frames', 'expr:gte(t,n_forced*90)',
-      '-c:a', 'aac', '-b:a', '96k', '-f', 'segment', '-segment_time', '90',
+      '-i', input, '-vf', 'scale=-2:480:force_original_aspect_ratio=decrease',
+      '-c:v', 'libx264', '-preset', 'ultrafast', '-threads', '1', '-b:v', '1200k',
+      '-maxrate', '1200k', '-bufsize', '2400k', '-force_key_frames', 'expr:gte(t,n_forced*90)',
+      '-c:a', 'aac', '-b:a', '64k', '-f', 'segment', '-segment_time', '90',
       '-segment_format', 'mp4', '-reset_timestamps', '1', '-segment_start_number', '0',
       '-y', pattern,
     ]);
